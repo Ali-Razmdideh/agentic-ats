@@ -16,6 +16,10 @@ enricher — orchestrated through one `ClaudeSDKClient` with bounded concurrency
 structured logging, retry-with-backoff, schema validation on every output, and
 per-run USD cost accounting.
 
+Persists to **Postgres** (results, audits, candidates, runs, orgs / users /
+memberships) and **MinIO** (resume + JD blobs) behind an org-scoped
+repository layer — multi-tenant from day one.
+
 ---
 
 ## Install
@@ -75,7 +79,15 @@ ATS_MODEL_FAST=anthropic/claude-haiku-4.5
 |---|---|---|
 | `ANTHROPIC_API_KEY` | — | API key (or OpenRouter key with the base URL above) |
 | `ANTHROPIC_BASE_URL` | Anthropic | Override endpoint (e.g. OpenRouter) |
-| `ATS_DB_PATH` | `./ats.db` | SQLite database path |
+| `ATS_PG_DSN` | `postgresql+asyncpg://ats:ats@localhost:5432/ats` | Async Postgres DSN |
+| `ATS_PG_POOL_SIZE` | `10` | SQLAlchemy pool size |
+| `ATS_PG_POOL_MAX_OVER` | `20` | SQLAlchemy max overflow |
+| `ATS_MINIO_ENDPOINT` | `http://localhost:9000` | S3-compatible endpoint URL (MinIO or AWS S3) |
+| `ATS_MINIO_ACCESS_KEY` | `minioadmin` | Access key |
+| `ATS_MINIO_SECRET_KEY` | `minioadmin` | Secret key |
+| `ATS_MINIO_BUCKET` | `ats-artifacts` | Bucket holding resumes + JDs |
+| `ATS_MINIO_REGION` | `us-east-1` | Required by boto3 even for MinIO |
+| `ATS_DEFAULT_ORG_SLUG` | `system` | Org used by the CLI (until auth lands) |
 | `ATS_INBOX_DIR` | `./inbox` | Default resume drop directory |
 | `ATS_MODEL_SMART` | `anthropic/claude-sonnet-4.5` | Used by matcher / verifier / bias_auditor / interview_qs |
 | `ATS_MODEL_FAST` | `anthropic/claude-haiku-4.5` | Used by parser / dedup / ranker / taxonomy / etc. |
@@ -89,12 +101,28 @@ ATS_MODEL_FAST=anthropic/claude-haiku-4.5
 
 ## Usage
 
+Bring up Postgres + MinIO locally (one-time):
+
 ```bash
-ats init
-ats screen --jd path/to/jd.txt --resumes path/to/resumes/ --top 5
-ats report --run 1 --cost
-ats outreach --run 1 --decision shortlist
+make dev-up        # docker compose up -d (Postgres on :5432, MinIO on :9000/:9001)
+ats init           # creates schema, seeds the default org, ensures the bucket
 ```
+
+`ats init` is idempotent: it runs `CREATE EXTENSION IF NOT EXISTS citext`, then
+SQLAlchemy's `create_all` to build the schema, seeds the default org from
+`ATS_DEFAULT_ORG_SLUG` (defaults to `system`), and ensures the MinIO bucket
+exists. There is no separate migration tool — schema lives in
+[`ats/storage/models.py`](ats/storage/models.py).
+
+Then:
+
+```bash
+ats screen --jd path/to/jd.txt --resumes path/to/resumes/ --top 5 [--org acme]
+ats report --run 1 --cost [--org acme]
+ats outreach --run 1 --decision shortlist [--org acme]
+```
+
+`--org` defaults to the `ATS_DEFAULT_ORG_SLUG` env var (`system`).
 
 Flags:
 
@@ -182,12 +210,15 @@ flake8 ats tests
 
 ## Roadmap
 
-Out of scope for v1.0 but on the radar:
+Sub-project #1 (Postgres + MinIO + multi-tenant storage foundation) is in
+place. Next up:
 
-- HTTP / FastAPI service for batch ingest.
-- Postgres + S3 backend.
+- HTTP / FastAPI service in front of the orchestrator.
+- AuthN / AuthZ — real users, sessions, IdP integration (membership +
+  role tables already exist).
+- Reviewer web UI (run list → shortlist → candidate detail → decisions).
+- Append-only signed audit log + compliance export.
 - LinkedIn enricher (today the enricher is GitHub-only).
-- Multi-tenant auth.
 
 ---
 
