@@ -1,4 +1,8 @@
-"""End-to-end pipeline tests with a fake LLM transport (no network)."""
+"""End-to-end pipeline tests with a fake LLM transport (no network).
+
+These now run against an ephemeral Postgres (testcontainers) and a
+``FakeBlobStore``. They skip cleanly if Docker is unavailable.
+"""
 
 from __future__ import annotations
 
@@ -8,11 +12,13 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+from sqlalchemy import select
 
-from ats import db
 from ats.config import Settings
 from ats.orchestrator import run_pipeline
+from ats.storage.models import Org, Run, Shortlist
 from tests.integration.fakes import make_factory
+from tests.storage.fakes import FakeBlobStore
 
 # --------------------------- canned agent handlers ---------------------------
 
@@ -28,7 +34,6 @@ def _jd_handler(_payload: str) -> dict[str, Any]:
     }
 
 
-# alice / bob / carol parsed shapes keyed by file basename
 _PARSED: dict[str, dict[str, Any]] = {
     "alice.txt": {
         "contact": {
@@ -101,9 +106,6 @@ def _verifier_handler(payload: str) -> dict[str, Any]:
 
 
 def _ranker_handler(_payload: str) -> dict[str, Any]:
-    # Read scores via DB tool — but here we just rank candidates 1..N.
-    # In the e2e tests, the orchestrator already wrote scores; the
-    # ranker is simulated to just shortlist top 2.
     return {
         "ranked": [
             {"candidate_id": 1, "rank": 1, "decision": "shortlist"},
@@ -135,7 +137,6 @@ def _bias_block(_payload: str) -> dict[str, Any]:
 
 
 def _bias_list_shape(_payload: str) -> list[dict[str, Any]]:
-    """Real-world failure shape: agent returned a JSON array, not an object."""
     return [
         {
             "cohort": "demographic-A",
@@ -165,7 +166,6 @@ def _dedup_match(payload: str) -> dict[str, Any]:
     }
 
 
-# regex to pull "INPUT:\n..." section out of the dispatcher prompt.
 _INPUT_RE = re.compile(r"INPUT:\n(.*)\Z", re.DOTALL)
 
 
@@ -178,12 +178,21 @@ def _extract_payload(prompt: str) -> str:
 
 
 @pytest.fixture
-def settings(tmp_path: Path) -> Settings:
-    return Settings(
-        db_path=tmp_path / "ats.db",
-        inbox_dir=tmp_path / "inbox",
-        agent_timeout_s=5,
-        agent_max_retries=0,
+async def system_org(pg_sessionmaker) -> int:  # type: ignore[no-untyped-def]
+    async with pg_sessionmaker() as session:
+        org = Org(slug="system", name="System (test)")
+        session.add(org)
+        await session.commit()
+        return int(org.id)
+
+
+@pytest.fixture
+def settings(pg_settings: Settings) -> Settings:
+    return pg_settings.model_copy(
+        update={
+            "agent_timeout_s": 5,
+            "agent_max_retries": 0,
+        }
     )
 
 
@@ -199,8 +208,6 @@ def resumes_dir(tmp_path: Path) -> Path:
     d = tmp_path / "resumes"
     d.mkdir()
     for name in ("alice.txt", "bob.txt", "carol.txt"):
-        # Use .txt so the verifier's extract_text_from_path round-trips
-        # cleanly without requiring a real PDF.
         (d / name).write_text(f"resume body for {name}")
     return d
 
@@ -210,7 +217,11 @@ def resumes_dir(tmp_path: Path) -> Path:
 
 @pytest.mark.asyncio
 async def test_happy_path_skip_optional(
-    settings: Settings, jd_file: Path, resumes_dir: Path
+    settings: Settings,
+    jd_file: Path,
+    resumes_dir: Path,
+    pg_sessionmaker,
+    system_org: int,
 ) -> None:
     handlers = {
         "jd_analyzer": _jd_handler,
@@ -228,20 +239,28 @@ async def test_happy_path_skip_optional(
         top_n=2,
         skip_optional=True,
         client_factory=make_factory(handlers),
+        blob_store=FakeBlobStore(),
+        sessionmaker_override=pg_sessionmaker,
     )
     assert summary["status"] == "ok"
     assert len(summary["candidates"]) == 3
     assert summary["audits"]["bias"]["status"] == "pass"
 
-    # DB row finalised
-    run_row = db.get_run(settings.db_path, summary["run_id"])
-    assert run_row is not None
-    assert run_row["status"] == "ok"
+    async with pg_sessionmaker() as session:
+        run = (
+            await session.execute(select(Run).where(Run.id == summary["run_id"]))
+        ).scalar_one()
+        assert run.status.value == "ok"
+        assert run.org_id == system_org
 
 
 @pytest.mark.asyncio
 async def test_bias_blocks_shortlist(
-    settings: Settings, jd_file: Path, resumes_dir: Path
+    settings: Settings,
+    jd_file: Path,
+    resumes_dir: Path,
+    pg_sessionmaker,
+    system_org: int,
 ) -> None:
     handlers = {
         "jd_analyzer": _jd_handler,
@@ -259,22 +278,28 @@ async def test_bias_blocks_shortlist(
         top_n=2,
         skip_optional=True,
         client_factory=make_factory(handlers),
+        blob_store=FakeBlobStore(),
+        sessionmaker_override=pg_sessionmaker,
     )
     assert summary["status"] == "blocked_by_bias"
-    # Ranker never wrote shortlist rows
-    with db.connect(settings.db_path) as c:
-        rows = c.execute(
-            "SELECT COUNT(*) AS n FROM shortlists WHERE run_id=?",
-            (summary["run_id"],),
-        ).fetchone()
-    assert rows["n"] == 0
+
+    async with pg_sessionmaker() as session:
+        rows = (
+            await session.execute(
+                select(Shortlist).where(Shortlist.run_id == summary["run_id"])
+            )
+        ).all()
+    assert len(rows) == 0
 
 
 @pytest.mark.asyncio
 async def test_bias_list_shape_is_coerced(
-    settings: Settings, jd_file: Path, resumes_dir: Path
+    settings: Settings,
+    jd_file: Path,
+    resumes_dir: Path,
+    pg_sessionmaker,
+    system_org: int,
 ) -> None:
-    """Real bug we hit twice: agent returned a list. Schema must coerce it."""
     handlers = {
         "jd_analyzer": _jd_handler,
         "parser": _parser_handler,
@@ -291,8 +316,9 @@ async def test_bias_list_shape_is_coerced(
         top_n=2,
         skip_optional=True,
         client_factory=make_factory(handlers),
+        blob_store=FakeBlobStore(),
+        sessionmaker_override=pg_sessionmaker,
     )
-    # Coercion: list under findings, default status=pass → run completes.
     assert summary["status"] == "ok"
     assert summary["audits"]["bias"]["status"] == "pass"
     assert len(summary["audits"]["bias"]["findings"]) == 1
@@ -300,7 +326,11 @@ async def test_bias_list_shape_is_coerced(
 
 @pytest.mark.asyncio
 async def test_dedup_drops_duplicate(
-    settings: Settings, jd_file: Path, resumes_dir: Path
+    settings: Settings,
+    jd_file: Path,
+    resumes_dir: Path,
+    pg_sessionmaker,
+    system_org: int,
 ) -> None:
     handlers = {
         "jd_analyzer": _jd_handler,
@@ -318,7 +348,8 @@ async def test_dedup_drops_duplicate(
         top_n=2,
         skip_optional=True,
         client_factory=make_factory(handlers),
+        blob_store=FakeBlobStore(),
+        sessionmaker_override=pg_sessionmaker,
     )
-    # 3 resumes - 1 duplicate = 2 processed candidates
     assert len(summary["candidates"]) == 2
     assert "dedup" in summary["audits"]
