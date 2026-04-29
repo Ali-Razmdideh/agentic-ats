@@ -1,23 +1,18 @@
 from __future__ import annotations
 
 import json
-from pathlib import Path
+import logging
 from typing import Any
 
 from claude_agent_sdk import tool
+from sqlalchemy.exc import SQLAlchemyError
 
-from ats import db
-from ats.config import get_settings
+from ats.storage import current_uow
 
+log = logging.getLogger("ats.tools.db_tools")
 
-def _db_path() -> Path:
-    return get_settings().db_path
+_MAX_AUDIT_BYTES = 1_000_000
 
-
-_MAX_AUDIT_BYTES = 1_000_000  # 1 MB hard cap on a single audit payload
-
-# Allow only these kinds (or prefixes ending in ":") to land in the audits
-# table. Prevents an agent from polluting the table with arbitrary keys.
 _KIND_ALLOWLIST = {"jd_parsed", "dedup", "outreach", "bias"}
 _KIND_PREFIXES = ("red_flags:", "interview_qs:", "enricher:")
 
@@ -55,7 +50,18 @@ async def save_audit(args: dict[str, Any]) -> dict[str, Any]:
             ],
             "isError": True,
         }
-    db.write_audit(_db_path(), int(args["run_id"]), kind, payload)
+    try:
+        async with current_uow() as repos:
+            await repos.audits.write(int(args["run_id"]), kind, payload)
+    except SQLAlchemyError as exc:
+        # Most likely cause: run_id from a different org (composite FK
+        # rejects it). Surface as a tool error rather than crashing the
+        # orchestrator's MCP loop.
+        log.warning("save_audit failed", extra={"err": str(exc), "kind": kind})
+        return {
+            "content": [{"type": "text", "text": f"ERROR: save_audit failed: {exc}"}],
+            "isError": True,
+        }
     return {"content": [{"type": "text", "text": "ok"}]}
 
 
@@ -65,7 +71,8 @@ async def save_audit(args: dict[str, Any]) -> dict[str, Any]:
     {"run_id": int},
 )
 async def get_run_scores(args: dict[str, Any]) -> dict[str, Any]:
-    rows = db.get_run_scores(_db_path(), int(args["run_id"]))
+    async with current_uow() as repos:
+        rows = await repos.scores.list_for_run(int(args["run_id"]))
     return {"content": [{"type": "text", "text": json.dumps(rows)}]}
 
 
@@ -75,5 +82,6 @@ async def get_run_scores(args: dict[str, Any]) -> dict[str, Any]:
     {"candidate_id": int},
 )
 async def get_candidate(args: dict[str, Any]) -> dict[str, Any]:
-    rec = db.get_candidate(_db_path(), int(args["candidate_id"]))
+    async with current_uow() as repos:
+        rec = await repos.candidates.get(int(args["candidate_id"]))
     return {"content": [{"type": "text", "text": json.dumps(rec)}]}

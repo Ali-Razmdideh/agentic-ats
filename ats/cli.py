@@ -9,10 +9,11 @@ import typer
 from rich.console import Console
 from rich.table import Table
 
-from ats import db
-from ats.config import get_settings
+from ats.config import Settings, get_settings
 from ats.logging import configure as configure_logging
 from ats.orchestrator import run_pipeline
+from ats.storage import BlobStore, make_engine, make_sessionmaker, uow
+from ats.storage.uow import _build_bundle
 
 app = typer.Typer(help="AI-powered resume screening (ATS).")
 console = Console()
@@ -34,13 +35,57 @@ def _root(
     _setup_logging(log_level, log_json)
 
 
+async def _resolve_org_id(settings: Settings, slug: str) -> int:
+    engine = make_engine(settings)
+    sm = make_sessionmaker(engine)
+    try:
+        async with sm() as session:
+            bundle = _build_bundle(session, org_id=0)
+            org = await bundle.orgs.get_by_slug(slug)
+            if org is None:
+                raise typer.BadParameter(
+                    f"Org '{slug}' not found. Run `ats init` first."
+                )
+            return int(org.id)
+    finally:
+        await engine.dispose()
+
+
+async def _init_async(settings: Settings) -> None:
+    """Create schema (idempotent), seed the default org, ensure the bucket."""
+    from sqlalchemy import select
+
+    from ats.storage.models import Base, Org
+
+    engine = make_engine(settings)
+    sm = make_sessionmaker(engine)
+    try:
+        async with engine.begin() as conn:
+            await conn.exec_driver_sql("CREATE EXTENSION IF NOT EXISTS citext")
+            await conn.run_sync(Base.metadata.create_all)
+        async with sm() as session:
+            existing = await session.execute(
+                select(Org).where(Org.slug == settings.default_org_slug)
+            )
+            if existing.scalar_one_or_none() is None:
+                session.add(Org(slug=settings.default_org_slug, name="System (CLI)"))
+                await session.commit()
+    finally:
+        await engine.dispose()
+
+    blob = BlobStore(settings)
+    await blob.ensure_bucket()
+
+
 @app.command()
 def init() -> None:
-    """Initialize the SQLite database and inbox directory."""
+    """Create Postgres schema, seed default org, create MinIO bucket + inbox."""
     s = get_settings()
-    db.init_db(s.db_path)
     s.inbox_dir.mkdir(parents=True, exist_ok=True)
-    console.print(f"[green]ok[/]  db={s.db_path}  inbox={s.inbox_dir}")
+    anyio.run(_init_async, s)
+    console.print(
+        f"[green]ok[/]  pg={s.pg_dsn}  bucket={s.minio_bucket}  inbox={s.inbox_dir}"
+    )
 
 
 @app.command()
@@ -64,26 +109,35 @@ def screen(
         "--max-cost-usd",
         help="Abort the run if cumulative spend exceeds this cap.",
     ),
+    org: str = typer.Option(
+        None, "--org", help="Org slug (default: ATS_DEFAULT_ORG_SLUG = 'system')."
+    ),
 ) -> None:
     """Run the full screening pipeline."""
     s = get_settings()
     if max_cost_usd is not None:
         s.max_cost_usd = max_cost_usd
-    summary = anyio.run(run_pipeline, s, jd, resumes, top, skip_optional)
+
+    async def _go() -> dict[str, object]:
+        return await run_pipeline(s, jd, resumes, top, skip_optional, org_slug=org)
+
+    summary = anyio.run(_go)
     console.print_json(data=summary)
 
 
-@app.command()
-def report(
-    run: int = typer.Option(..., help="Run id."),
-    cost: bool = typer.Option(False, "--cost", help="Show token usage and USD cost."),
-) -> None:
-    """Print a summary of a previous run."""
-    s = get_settings()
-    scores = db.get_run_scores(s.db_path, run)
-    audits = db.get_audits(s.db_path, run)
+async def _report_async(settings: Settings, slug: str, run_id: int, cost: bool) -> None:
+    org_id = await _resolve_org_id(settings, slug)
+    engine = make_engine(settings)
+    sm = make_sessionmaker(engine)
+    try:
+        async with uow(sm, org_id) as repos:
+            scores = await repos.scores.list_for_run(run_id)
+            audits = await repos.audits.list_for_run(run_id)
+            run_row = await repos.runs.get(run_id)
+    finally:
+        await engine.dispose()
 
-    t = Table(title=f"Run {run} — Candidates")
+    t = Table(title=f"Run {run_id} — Candidates")
     t.add_column("ID")
     t.add_column("Name")
     t.add_column("Email")
@@ -105,8 +159,7 @@ def report(
         console.print_json(data=bias["payload"])
 
     if cost:
-        run_row = db.get_run(s.db_path, run)
-        usage = (run_row or {}).get("usage", {})
+        usage = (run_row or {}).get("usage") or {}
         if usage:
             console.print("[bold]Cost:[/]")
             console.print_json(data=usage)
@@ -115,30 +168,60 @@ def report(
 
 
 @app.command()
+def report(
+    run: int = typer.Option(..., help="Run id."),
+    cost: bool = typer.Option(False, "--cost", help="Show token usage and USD cost."),
+    org: str = typer.Option(None, "--org"),
+) -> None:
+    """Print a summary of a previous run."""
+    s = get_settings()
+    slug = org or s.default_org_slug
+    anyio.run(_report_async, s, slug, run, cost)
+
+
+async def _outreach_async(
+    settings: Settings, slug: str, run_id: int
+) -> dict[str, object]:
+    org_id = await _resolve_org_id(settings, slug)
+    engine = make_engine(settings)
+    sm = make_sessionmaker(engine)
+    try:
+        async with uow(sm, org_id) as repos:
+            audits = await repos.audits.list_for_run(run_id)
+    finally:
+        await engine.dispose()
+    drafts_audit = next((a for a in audits if a["kind"] == "outreach"), None)
+    if not drafts_audit:
+        return {}
+    payload: dict[str, object] = drafts_audit["payload"]
+    return payload
+
+
+@app.command()
 def outreach(
     run: int = typer.Option(...),
     decision: str = typer.Option(
         "shortlist", help="shortlist | reject (filter applied)."
     ),
+    org: str = typer.Option(None, "--org"),
 ) -> None:
     """Print outreach drafts for a run."""
     s = get_settings()
-    audits = db.get_audits(s.db_path, run)
-    drafts_audit = next((a for a in audits if a["kind"] == "outreach"), None)
-    if not drafts_audit:
+    slug = org or s.default_org_slug
+    payload = anyio.run(_outreach_async, s, slug, run)
+    if not payload:
         console.print("[yellow]No outreach drafts found for this run.[/]")
         raise typer.Exit(0)
-    drafts = drafts_audit["payload"].get("drafts", [])
     if decision != "shortlist":
         console.print(
             "[yellow]Only 'shortlist' drafts are produced; "
             "no rejection emails are stored.[/]"
         )
         raise typer.Exit(0)
-    console.print_json(data={"drafts": drafts})
+    console.print_json(data={"drafts": payload.get("drafts", [])})
 
 
-def main() -> None:  # entrypoint for `python -m ats.cli`
+def main() -> None:
     app()
 
 

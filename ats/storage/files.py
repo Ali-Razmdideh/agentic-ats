@@ -1,3 +1,5 @@
+"""Filesystem helpers for resume ingestion."""
+
 from __future__ import annotations
 
 import hashlib

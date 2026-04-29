@@ -10,8 +10,22 @@ class Settings(BaseSettings):
         env_file=".env", env_prefix="ATS_", extra="ignore"
     )
 
-    db_path: Path = Path("./ats.db")
     inbox_dir: Path = Path("./inbox")
+
+    # Postgres
+    pg_dsn: str = "postgresql+asyncpg://ats:ats@localhost:5432/ats"
+    pg_pool_size: int = 10
+    pg_pool_max_over: int = 20
+
+    # MinIO / S3-compatible
+    minio_endpoint: str = "http://localhost:9000"
+    minio_access_key: str = "minioadmin"
+    minio_secret_key: str = "minioadmin"
+    minio_bucket: str = "ats-artifacts"
+    minio_region: str = "us-east-1"
+
+    # Default org slug used by the CLI until sub-project #3 lands real auth.
+    default_org_slug: str = "system"
 
     # Defaults proven against OpenRouter; native Anthropic IDs work too via
     # ANTHROPIC_BASE_URL=https://api.anthropic.com plus ANTHROPIC_API_KEY.
