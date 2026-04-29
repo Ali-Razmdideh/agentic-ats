@@ -124,6 +124,22 @@ ats outreach --run 1 --decision shortlist [--org acme]
 
 `--org` defaults to the `ATS_DEFAULT_ORG_SLUG` env var (`system`).
 
+### Dashboard
+
+A Next.js reviewer dashboard lives in [`dashboard/`](dashboard/) — multi-tenant signup / login, JD + resume uploads that queue runs for the worker, and a per-candidate UI for shortlist / hold / reject decisions plus a comment thread.
+
+```bash
+make dev-up                    # Postgres + MinIO
+ats init                       # schema + bucket
+ats worker &                   # background worker that processes queued runs
+cd dashboard
+cp .env.example .env.local
+npm install
+npm run dev                    # http://localhost:3000
+```
+
+Sign up at `/signup` — the org is auto-created from your email's domain (`alice@acme.com` → `acme`). Subsequent users at the same domain auto-join that org as `reviewer`. Schema source-of-truth stays in Python (`ats/storage/models.py`); the dashboard reads/writes via raw `pg` queries with hand-typed TypeScript shapes.
+
 Flags:
 
 ```
@@ -210,15 +226,14 @@ flake8 ats tests
 
 ## Roadmap
 
-Sub-project #1 (Postgres + MinIO + multi-tenant storage foundation) is in
-place. Next up:
-
-- HTTP / FastAPI service in front of the orchestrator.
-- AuthN / AuthZ — real users, sessions, IdP integration (membership +
-  role tables already exist).
-- Reviewer web UI (run list → shortlist → candidate detail → decisions).
-- Append-only signed audit log + compliance export.
-- LinkedIn enricher (today the enricher is GitHub-only).
+- ✅ Sub-project #1: Postgres + MinIO + multi-tenant storage foundation.
+- ✅ Sub-projects #2–#4 (bundled): Next.js reviewer dashboard with email +
+  password auth (cookie sessions), upload-and-queue runs, per-candidate
+  shortlist / hold / reject decisions, comment threads, presigned MinIO
+  resume downloads.
+- ⏳ Sub-project #5: append-only signed audit log + compliance export.
+- ⏳ Password reset by email, email verification, multi-org invitations.
+- ⏳ LinkedIn enricher (today the enricher is GitHub-only).
 
 ---
 
