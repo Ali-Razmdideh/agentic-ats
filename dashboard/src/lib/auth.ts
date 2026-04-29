@@ -8,7 +8,6 @@ import {
   getActiveOrgCookie,
   getSessionCookie,
   getUserBySession,
-  setActiveOrgCookie,
   setSessionCookie,
 } from "@/lib/session";
 import type { Membership, Org, User } from "@/lib/types";
@@ -132,7 +131,15 @@ export async function getCurrentUser(): Promise<User | null> {
   return getUserBySession(sid);
 }
 
-/** Returns user + active org or redirects to /login. */
+/** Returns user + active org or redirects to /login.
+ *
+ * READ-ONLY: this function MUST be safe to call from a server component
+ * (page / layout). Next.js 15 forbids ``cookies().set()`` outside Server
+ * Actions / Route Handlers, so the active-org cookie is only persisted
+ * by ``/api/auth/switch-org``. If the cookie is missing or stale, we
+ * fall back to the user's first membership for this request — the next
+ * login or org switch will write the cookie.
+ */
 export async function requireUserAndOrg(): Promise<{
   user: User;
   org: Org;
@@ -145,10 +152,7 @@ export async function requireUserAndOrg(): Promise<{
     throw new Error("user has no org memberships");
   }
   const activeSlug = await getActiveOrgCookie();
-  let active = memberships.find((m) => m.org.slug === activeSlug);
-  if (!active) {
-    active = memberships[0]!;
-    await setActiveOrgCookie(active.org.slug);
-  }
+  const active =
+    memberships.find((m) => m.org.slug === activeSlug) ?? memberships[0]!;
   return { user, org: active.org, role: active.role };
 }
