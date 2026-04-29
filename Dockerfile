@@ -31,7 +31,6 @@ FROM python:${PYTHON_VERSION}-slim AS runtime
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PATH="/opt/venv/bin:${PATH}" \
-    ATS_DB_PATH=/data/ats.db \
     ATS_INBOX_DIR=/data/inbox
 
 # Node.js is required by the bundled Claude Code CLI that the SDK shells out to.
