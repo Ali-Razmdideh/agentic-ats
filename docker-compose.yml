@@ -64,6 +64,29 @@ services:
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
     command: ["worker"]
 
+  # Reviewer dashboard (Next.js). Requires ats-dashboard:dev image built
+  # locally — see dashboard/Dockerfile.
+  dashboard:
+    image: ats-dashboard:dev
+    profiles: ["app"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://ats:ats@postgres:5432/ats
+      MINIO_ENDPOINT: http://minio:9000
+      MINIO_ACCESS_KEY: minioadmin
+      MINIO_SECRET_KEY: minioadmin
+      MINIO_BUCKET: ats-artifacts
+      MINIO_REGION: us-east-1
+      SESSION_COOKIE_NAME: ats_session
+      DASHBOARD_ORIGIN: http://localhost:3000
+      NODE_ENV: production
+    ports:
+      - "3000:3000"
+
 volumes:
   ats-pgdata:
   ats-miniodata:
