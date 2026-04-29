@@ -36,6 +36,7 @@ class Role(str, enum.Enum):
 
 
 class RunStatus(str, enum.Enum):
+    queued = "queued"
     running = "running"
     completed = "completed"
     failed = "failed"
@@ -43,6 +44,12 @@ class RunStatus(str, enum.Enum):
     blocked_by_bias = "blocked_by_bias"
     budget_exceeded = "budget_exceeded"
     ok = "ok"
+
+
+class DecisionKind(str, enum.Enum):
+    shortlist = "shortlist"
+    reject = "reject"
+    hold = "hold"
 
 
 class Org(Base):
@@ -62,12 +69,36 @@ class User(Base):
     id: Mapped[int] = mapped_column(BigInteger, Identity(always=True), primary_key=True)
     email: Mapped[str] = mapped_column(CITEXT, unique=True, nullable=False)
     display_name: Mapped[str | None] = mapped_column(Text, nullable=True)
+    password_hash: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
     disabled_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
+
+
+class Session(Base):
+    __tablename__ = "sessions"
+
+    id: Mapped[str] = mapped_column(Text, primary_key=True)
+    user_id: Mapped[int] = mapped_column(
+        BigInteger, ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
+    expires_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    last_seen_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    revoked_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    user_agent: Mapped[str | None] = mapped_column(Text, nullable=True)
+    ip: Mapped[str | None] = mapped_column(Text, nullable=True)
 
 
 class Membership(Base):
@@ -107,6 +138,11 @@ class Run(Base):
     usage: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
     created_by_user_id: Mapped[int | None] = mapped_column(
         BigInteger, ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    queued_inputs: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
+    worker_id: Mapped[str | None] = mapped_column(Text, nullable=True)
+    claimed_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
     )
 
     __table_args__ = (UniqueConstraint("org_id", "id", name="uq_runs_org_id"),)
@@ -204,5 +240,76 @@ class Audit(Base):
             ["runs.org_id", "runs.id"],
             ondelete="CASCADE",
             name="fk_audits_runs",
+        ),
+    )
+
+
+class Decision(Base):
+    __tablename__ = "decisions"
+
+    run_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    candidate_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    org_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    decision: Mapped[DecisionKind] = mapped_column(
+        Enum(DecisionKind, name="decision_kind_enum"), nullable=False
+    )
+    notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    decided_by_user_id: Mapped[int] = mapped_column(
+        BigInteger, ForeignKey("users.id", ondelete="RESTRICT"), nullable=False
+    )
+    decided_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=False,
+    )
+
+    __table_args__ = (
+        PrimaryKeyConstraint("run_id", "candidate_id", name="pk_decisions"),
+        ForeignKeyConstraint(
+            ["org_id", "run_id"],
+            ["runs.org_id", "runs.id"],
+            ondelete="CASCADE",
+            name="fk_decisions_runs",
+        ),
+        ForeignKeyConstraint(
+            ["org_id", "candidate_id"],
+            ["candidates.org_id", "candidates.id"],
+            ondelete="CASCADE",
+            name="fk_decisions_candidates",
+        ),
+    )
+
+
+class CandidateComment(Base):
+    __tablename__ = "candidate_comments"
+
+    id: Mapped[int] = mapped_column(BigInteger, Identity(always=True), primary_key=True)
+    org_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    run_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    candidate_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    author_user_id: Mapped[int] = mapped_column(
+        BigInteger, ForeignKey("users.id", ondelete="RESTRICT"), nullable=False
+    )
+    body: Mapped[str] = mapped_column(Text, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["org_id", "run_id"],
+            ["runs.org_id", "runs.id"],
+            ondelete="CASCADE",
+            name="fk_candidate_comments_runs",
+        ),
+        ForeignKeyConstraint(
+            ["org_id", "candidate_id"],
+            ["candidates.org_id", "candidates.id"],
+            ondelete="CASCADE",
+            name="fk_candidate_comments_candidates",
         ),
     )

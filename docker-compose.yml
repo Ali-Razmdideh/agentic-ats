@@ -44,6 +44,26 @@ services:
       mc version enable local/ats-artifacts || true
       "
 
+  # Optional: bring up the Python worker that processes queued runs.
+  # Requires ats:dev image to be built locally first (see Dockerfile).
+  worker:
+    image: ats:dev
+    profiles: ["app"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    environment:
+      ATS_PG_DSN: postgresql+asyncpg://ats:ats@postgres:5432/ats
+      ATS_MINIO_ENDPOINT: http://minio:9000
+      ATS_MINIO_ACCESS_KEY: minioadmin
+      ATS_MINIO_SECRET_KEY: minioadmin
+      ATS_MINIO_BUCKET: ats-artifacts
+      ATS_MINIO_REGION: us-east-1
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+    command: ["worker"]
+
 volumes:
   ats-pgdata:
   ats-miniodata:

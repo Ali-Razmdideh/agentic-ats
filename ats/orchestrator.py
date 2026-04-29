@@ -123,7 +123,15 @@ async def run_pipeline(
     org_slug: str | None = None,
     blob_store: BlobStoreProtocol | None = None,
     sessionmaker_override: Any = None,
+    org_id_override: int | None = None,
+    existing_run_id: int | None = None,
 ) -> dict[str, Any]:
+    """Run the full screening pipeline.
+
+    The CLI (`ats screen`) creates a new run row. The worker passes
+    ``org_id_override`` + ``existing_run_id`` so the queued row created at
+    upload time gets reused — no double-counting.
+    """
     engine = None
     if sessionmaker_override is not None:
         sessionmaker = sessionmaker_override
@@ -133,20 +141,32 @@ async def run_pipeline(
 
     blobs: BlobStoreProtocol = blob_store or BlobStore(settings)
 
-    slug = org_slug or settings.default_org_slug
-    org_id = await _resolve_org_id(sessionmaker, slug)
+    if org_id_override is not None:
+        org_id = org_id_override
+    else:
+        slug = org_slug or settings.default_org_slug
+        org_id = await _resolve_org_id(sessionmaker, slug)
 
     jd_text = read_text_file(jd_path)
     jd_hash_value = hash_text(jd_text)
 
-    # Upload the JD as a blob so it's durably stored alongside resumes.
-    jd_blob_key = await blobs.put_jd(org_id, jd_text.encode("utf-8"), jd_path.name)
+    # Worker path: the JD is already in MinIO from the upload step, so we
+    # skip the put_jd round-trip. CLI path: upload now (content-addressed,
+    # so re-runs are a no-op anyway).
+    jd_blob_key: str | None = None
+    if existing_run_id is None:
+        jd_blob_key = await blobs.put_jd(org_id, jd_text.encode("utf-8"), jd_path.name)
 
     async with run_context(sessionmaker, org_id):
-        async with uow(sessionmaker, org_id) as repos:
-            run_id = await repos.runs.create(
-                jd_path=str(jd_path), jd_hash=jd_hash_value, jd_blob_key=jd_blob_key
-            )
+        if existing_run_id is not None:
+            run_id = existing_run_id
+        else:
+            async with uow(sessionmaker, org_id) as repos:
+                run_id = await repos.runs.create(
+                    jd_path=str(jd_path),
+                    jd_hash=jd_hash_value,
+                    jd_blob_key=jd_blob_key,
+                )
         log.info(
             "run start",
             extra={"run_id": run_id, "jd_path": str(jd_path), "org_id": org_id},

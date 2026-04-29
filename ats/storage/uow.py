@@ -22,11 +22,14 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from ats.storage.repositories import (
     AuditRepository,
+    CandidateCommentRepository,
     CandidateRepository,
+    DecisionRepository,
     MembershipRepository,
     OrgRepository,
     RunRepository,
     ScoreRepository,
+    SessionRepository,
     ShortlistRepository,
     UserRepository,
 )
@@ -41,9 +44,12 @@ class RepositoryBundle:
     scores: ScoreRepository
     shortlists: ShortlistRepository
     audits: AuditRepository
+    decisions: DecisionRepository
+    comments: CandidateCommentRepository
     orgs: OrgRepository
     users: UserRepository
     memberships: MembershipRepository
+    sessions: SessionRepository
 
 
 def _build_bundle(session: AsyncSession, org_id: int) -> RepositoryBundle:
@@ -55,9 +61,12 @@ def _build_bundle(session: AsyncSession, org_id: int) -> RepositoryBundle:
         scores=ScoreRepository(session, org_id),
         shortlists=ShortlistRepository(session, org_id),
         audits=AuditRepository(session, org_id),
+        decisions=DecisionRepository(session, org_id),
+        comments=CandidateCommentRepository(session, org_id),
         orgs=OrgRepository(session),
         users=UserRepository(session),
         memberships=MembershipRepository(session),
+        sessions=SessionRepository(session),
     )
 
 

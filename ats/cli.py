@@ -89,6 +89,20 @@ def init() -> None:
 
 
 @app.command()
+def worker(
+    poll_s: float = typer.Option(3.0, help="Seconds between queue polls when idle."),
+    worker_id: str = typer.Option(
+        None, help="Override worker id (default: hostname-pid)."
+    ),
+) -> None:
+    """Run the background worker that processes queued runs."""
+    from ats.worker import run_worker
+
+    s = get_settings()
+    run_worker(s, worker_id=worker_id, poll_s=poll_s)
+
+
+@app.command()
 def screen(
     jd: Path = typer.Option(
         ..., exists=True, readable=True, help="Path to JD text file."
