@@ -13,7 +13,7 @@ log = logging.getLogger("ats.tools.db_tools")
 
 _MAX_AUDIT_BYTES = 1_000_000
 
-_KIND_ALLOWLIST = {"jd_parsed", "dedup", "outreach", "bias"}
+_KIND_ALLOWLIST = {"jd_parsed", "dedup", "outreach", "bias", "run_error"}
 _KIND_PREFIXES = ("red_flags:", "interview_qs:", "enricher:")
 
 

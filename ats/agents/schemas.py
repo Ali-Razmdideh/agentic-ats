@@ -221,15 +221,62 @@ AGENT_SCHEMAS: dict[str, type[BaseModel]] = {
 T = TypeVar("T", bound=BaseModel)
 
 
+_DEGENERATE_AGENTS = {"jd_analyzer", "parser", "matcher"}
+
+
+def _looks_degenerate(agent: str, model: BaseModel) -> bool:
+    """Detect a "valid but useless" response on load-bearing agents.
+
+    The matcher / parser / jd_analyzer outputs all have at least one
+    non-empty field in any real run. If the schema validates but every
+    such field is empty, treat it as a soft validation failure so the
+    invoker can retry.
+    """
+    if agent == "jd_analyzer":
+        d = model.model_dump()
+        empty_text = not (d.get("role_family") or "").strip()
+        empty_lists = not d.get("must_have") and not d.get("nice_to_have") and not d.get(
+            "responsibilities"
+        )
+        return empty_text and empty_lists
+    if agent == "parser":
+        d = model.model_dump()
+        contact = d.get("contact") or {}
+        empty_contact = not (contact.get("name") or contact.get("email"))
+        empty_lists = not d.get("experience") and not d.get("skills")
+        return empty_contact and empty_lists
+    if agent == "matcher":
+        d = model.model_dump()
+        return (
+            float(d.get("score") or 0.0) == 0.0
+            and not d.get("must_have_hits")
+            and not d.get("must_have_misses")
+        )
+    return False
+
+
 def coerce_to_model(agent: str, raw: Any) -> BaseModel:
     """Validate ``raw`` against ``AGENT_SCHEMAS[agent]``, with shape coercion.
 
     Real models occasionally return a JSON array when the schema expects an
     object, or wrap the object in ``{"data": ...}``. We try the raw value,
     then unwrap common envelope keys, then wrap a bare list under the
-    schema's primary list field. If every candidate still fails validation
-    we fall back to a default-constructed model so the pipeline keeps moving;
-    the caller logs the violation.
+    schema's primary list field.
+
+    Two failure modes:
+
+    - Every candidate fails validation → raise CoercionFailedError so the
+      caller's retry loop can try again. Previously this silently returned
+      a default-constructed model, which let the pipeline proceed against
+      an empty parse (matcher would score against an empty JD, etc.).
+    - Validation succeeds but the result is "valid but empty" on a
+      load-bearing agent (jd_analyzer / parser / matcher) — also raise so
+      the retry loop kicks in. This catches the LLM-returned-{} case where
+      pydantic happily fills defaults.
+
+    Optional-tier agents (red_flags, summarizer, …) keep the soft-fallback
+    behaviour: an empty result there is acceptable and the caller will
+    log + skip.
     """
     schema = AGENT_SCHEMAS.get(agent)
     if schema is None:
@@ -257,19 +304,48 @@ def coerce_to_model(agent: str, raw: Any) -> BaseModel:
     last_err: ValidationError | None = None
     for c in candidates:
         try:
-            return schema.model_validate(c)
+            model = schema.model_validate(c)
         except ValidationError as exc:
             last_err = exc
             continue
+        if agent in _DEGENERATE_AGENTS and _looks_degenerate(agent, model):
+            # Try the next candidate; if none survive we fall through to
+            # the post-loop fallback below.
+            last_err = ValidationError.from_exception_data(  # type: ignore[arg-type]
+                title="degenerate-output",
+                line_errors=[],
+            ) if last_err is None else last_err
+            continue
+        return model
 
-    log_msg = (
-        f"coerce_to_model({agent}) failed validation; "
-        f"falling back to default. error={last_err}"
+    raise CoercionFailedError(
+        agent=agent,
+        raw=raw,
+        validation_error=last_err,
     )
-    import logging as _logging
 
-    _logging.getLogger("ats.invoke").warning(log_msg)
-    return schema()
+
+class CoercionFailedError(RuntimeError):
+    """Raised when no candidate validated, or every candidate degenerated.
+
+    Carries the raw LLM payload so the invoker can persist it for debugging
+    and so the retry loop can try a fresh model call.
+    """
+
+    def __init__(
+        self,
+        *,
+        agent: str,
+        raw: Any,
+        validation_error: ValidationError | None,
+    ) -> None:
+        self.agent = agent
+        self.raw = raw
+        self.validation_error = validation_error
+        super().__init__(
+            f"coerce_to_model({agent}) produced no usable output "
+            f"(validation_error={validation_error})"
+        )
 
 
 def _primary_list_field(schema: type[BaseModel]) -> str | None:

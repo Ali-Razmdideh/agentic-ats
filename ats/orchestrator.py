@@ -488,6 +488,32 @@ async def run_pipeline(
             summary["status"] = "budget_exceeded"
             summary["error"] = str(exc)
             return summary
+        except Exception as exc:
+            # Catch-all: any unhandled agent failure (timeouts past retries,
+            # CoercionFailedError on a load-bearing agent, etc.) used to leave
+            # the run stuck in `status='running'` forever. Now mark it failed
+            # and persist the error message so the dashboard can surface it.
+            log.exception(
+                "run failed",
+                extra={"run_id": run_id, "agent_error": type(exc).__name__},
+            )
+            try:
+                async with uow(sessionmaker, org_id) as repos:
+                    await repos.runs.update_usage(run_id, usage.to_dict())
+                    await repos.runs.finish(run_id, RunStatus.failed)
+                    await repos.audits.write(
+                        run_id,
+                        "run_error",
+                        {
+                            "error_type": type(exc).__name__,
+                            "message": str(exc)[:2000],
+                        },
+                    )
+            except Exception:  # pragma: no cover - last-resort safety
+                log.exception("failed to persist run failure", extra={"run_id": run_id})
+            summary["status"] = "failed"
+            summary["error"] = str(exc)
+            return summary
         finally:
             if engine is not None:
                 await engine.dispose()

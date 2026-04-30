@@ -179,10 +179,14 @@ async def invoke_agent(
     usage: Usage | None = None,
 ) -> BaseModel:
     """Invoke a subagent and return its validated, typed output."""
+    from ats.agents.schemas import CoercionFailedError
+
     start = time.monotonic()
     try:
         async for attempt in AsyncRetrying(
-            retry=retry_if_exception_type(TransientAgentError),
+            retry=retry_if_exception_type(
+                (TransientAgentError, CoercionFailedError)
+            ),
             stop=stop_after_attempt(max_retries + 1),
             wait=wait_exponential(multiplier=1.5, min=1, max=10),
             reraise=True,
@@ -191,7 +195,22 @@ async def invoke_agent(
                 raw = await _one_attempt(
                     client, agent, payload, timeout_s, client_lock, usage
                 )
-                model = coerce_to_model(agent, raw)
+                try:
+                    model = coerce_to_model(agent, raw)
+                except CoercionFailedError as exc:
+                    log.warning(
+                        "agent output unusable; retrying",
+                        extra={
+                            "run_id": run_id,
+                            "candidate_id": candidate_id,
+                            "agent": agent,
+                            "attempt": attempt.retry_state.attempt_number,
+                            "raw_preview": (
+                                str(exc.raw)[:500] if exc.raw is not None else ""
+                            ),
+                        },
+                    )
+                    raise
                 latency_ms = int((time.monotonic() - start) * 1000)
                 log.info(
                     "agent ok",

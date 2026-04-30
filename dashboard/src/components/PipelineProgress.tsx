@@ -159,6 +159,7 @@ const KIND_LABEL: Record<string, string> = {
   dedup: "Deduplication",
   bias: "Bias audit",
   outreach: "Outreach drafts",
+  run_error: "Run failed",
 };
 
 function prettyKind(kind: string): string {

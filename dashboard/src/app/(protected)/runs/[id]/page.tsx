@@ -55,6 +55,9 @@ export default async function RunDetailPage({
 
   const bias = audits.find((a) => a.kind === "bias");
   const jdParsed = audits.find((a) => a.kind === "jd_parsed")?.payload;
+  const runError = audits.find((a) => a.kind === "run_error")?.payload as
+    | { error_type?: string; message?: string }
+    | undefined;
 
   const expectedCandidates = run.queued_inputs?.resume_blob_keys?.length ?? scores.length;
   const skipOptional = run.queued_inputs?.skip_optional ?? false;
@@ -72,6 +75,31 @@ export default async function RunDetailPage({
       </div>
 
       {isPending && <RunStatusPoller runId={run.id} />}
+
+      {runError && (
+        <section className="rounded-xl border border-red-200 bg-red-50 p-4">
+          <h2 className="mb-1 flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-red-800">
+            <span>⨯</span>
+            Run failed
+          </h2>
+          <p className="text-sm text-red-900">
+            {runError.error_type && (
+              <span className="font-mono text-xs text-red-700">
+                {runError.error_type}:{" "}
+              </span>
+            )}
+            {runError.message || "Unknown error."}
+          </p>
+          <p className="mt-2 text-xs text-red-700">
+            The orchestrator hit an unrecoverable error and stopped. Re-upload
+            and try again; if it keeps happening, check{" "}
+            <code className="rounded bg-white px-1 py-0.5">
+              docker compose logs worker
+            </code>
+            .
+          </p>
+        </section>
+      )}
 
       <RunJobDescription
         jdParsedPayload={jdParsed}
