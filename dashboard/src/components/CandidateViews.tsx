@@ -196,20 +196,90 @@ export function ParsedResumeView({ parsed }: { parsed: unknown }) {
           </h3>
           <div className="flex flex-wrap gap-2 text-sm">
             {links.map((l, i) => (
-              <a
-                key={`${l}-${i}`}
-                href={l}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="rounded-md border border-slate-200 bg-slate-50 px-2 py-1 font-mono text-xs text-slate-700 hover:border-slate-400 hover:bg-white"
-              >
-                {l}
-              </a>
+              <LinkChip key={`${l}-${i}`} url={l} />
             ))}
           </div>
         </div>
       )}
     </div>
+  );
+}
+
+// Maps a URL to a friendly label / icon by looking at its domain. Used in
+// the "Links" section of the parsed-resume view so chips read "LinkedIn"
+// instead of `https://linkedin.com/in/...`. Falls back to the bare host.
+function describeLink(url: string): {
+  label: string;
+  icon: string;
+  href: string;
+  tone: "blue" | "slate" | "indigo" | "emerald" | "amber";
+} {
+  let href = url.trim();
+  if (
+    !href.startsWith("http://") &&
+    !href.startsWith("https://") &&
+    !href.startsWith("mailto:") &&
+    !href.startsWith("tel:")
+  ) {
+    // bare-host or "linkedin.com/foo" — make it a real link
+    href = `https://${href}`;
+  }
+  let host = "";
+  try {
+    host = new URL(href).hostname.toLowerCase().replace(/^www\./, "");
+  } catch {
+    return { label: url, icon: "↗", href, tone: "slate" };
+  }
+  if (host === "linkedin.com" || host.endsWith(".linkedin.com")) {
+    return { label: "LinkedIn", icon: "in", href, tone: "blue" };
+  }
+  if (host === "github.com") {
+    return { label: "GitHub", icon: "GH", href, tone: "slate" };
+  }
+  if (host.endsWith("stackoverflow.com")) {
+    return { label: "Stack Overflow", icon: "SO", href, tone: "amber" };
+  }
+  if (host.endsWith("twitter.com") || host === "x.com") {
+    return { label: "X", icon: "𝕏", href, tone: "slate" };
+  }
+  if (host.endsWith("kaggle.com")) {
+    return { label: "Kaggle", icon: "K", href, tone: "blue" };
+  }
+  if (host.endsWith("medium.com")) {
+    return { label: "Medium", icon: "M", href, tone: "slate" };
+  }
+  if (host === "wa.me" || host.endsWith("whatsapp.com")) {
+    return { label: "WhatsApp", icon: "WA", href, tone: "emerald" };
+  }
+  if (host === "t.me" || host.endsWith("telegram.org")) {
+    return { label: "Telegram", icon: "TG", href, tone: "blue" };
+  }
+  if (href.startsWith("mailto:")) {
+    return { label: href.slice(7), icon: "✉", href, tone: "slate" };
+  }
+  return { label: host, icon: "↗", href, tone: "slate" };
+}
+
+function LinkChip({ url }: { url: string }) {
+  const { label, icon, href, tone } = describeLink(url);
+  const tones: Record<string, string> = {
+    slate: "bg-slate-50 border-slate-200 text-slate-700 hover:bg-white",
+    blue: "bg-blue-50 border-blue-200 text-blue-800 hover:bg-white",
+    indigo: "bg-indigo-50 border-indigo-200 text-indigo-800 hover:bg-white",
+    emerald: "bg-emerald-50 border-emerald-200 text-emerald-800 hover:bg-white",
+    amber: "bg-amber-50 border-amber-200 text-amber-800 hover:bg-white",
+  };
+  return (
+    <a
+      href={href}
+      target="_blank"
+      rel="noopener noreferrer"
+      title={href}
+      className={`inline-flex items-center gap-1.5 rounded-md border px-2 py-1 text-xs ${tones[tone]}`}
+    >
+      <span className="font-mono text-[10px] font-bold opacity-70">{icon}</span>
+      <span>{label}</span>
+    </a>
   );
 }
 
