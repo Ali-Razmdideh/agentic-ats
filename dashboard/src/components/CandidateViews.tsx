@@ -211,24 +211,27 @@ export function ParsedResumeView({ parsed }: { parsed: unknown }) {
 function describeLink(url: string): {
   label: string;
   icon: string;
-  href: string;
+  href: string | null;
   tone: "blue" | "slate" | "indigo" | "emerald" | "amber";
 } {
-  let href = url.trim();
-  if (
-    !href.startsWith("http://") &&
-    !href.startsWith("https://") &&
-    !href.startsWith("mailto:") &&
-    !href.startsWith("tel:")
-  ) {
-    // bare-host or "linkedin.com/foo" — make it a real link
+  const trimmed = url.trim();
+  const looksLikeUrl =
+    /^(https?:|mailto:|tel:)/i.test(trimmed) ||
+    /^[a-z0-9-]+(\.[a-z0-9-]+)+(\/|$)/i.test(trimmed);
+  if (!looksLikeUrl) {
+    // Plain-text label like "LinkedIn" — keep it visible but don't fabricate
+    // a fake href like "https://LinkedIn". Render as a non-clickable chip.
+    return { label: trimmed, icon: "·", href: null, tone: "slate" };
+  }
+  let href = trimmed;
+  if (!/^(https?:|mailto:|tel:)/i.test(href)) {
     href = `https://${href}`;
   }
   let host = "";
   try {
     host = new URL(href).hostname.toLowerCase().replace(/^www\./, "");
   } catch {
-    return { label: url, icon: "↗", href, tone: "slate" };
+    return { label: url, icon: "↗", href: null, tone: "slate" };
   }
   if (host === "linkedin.com" || host.endsWith(".linkedin.com")) {
     return { label: "LinkedIn", icon: "in", href, tone: "blue" };
@@ -263,22 +266,38 @@ function describeLink(url: string): {
 function LinkChip({ url }: { url: string }) {
   const { label, icon, href, tone } = describeLink(url);
   const tones: Record<string, string> = {
-    slate: "bg-slate-50 border-slate-200 text-slate-700 hover:bg-white",
-    blue: "bg-blue-50 border-blue-200 text-blue-800 hover:bg-white",
-    indigo: "bg-indigo-50 border-indigo-200 text-indigo-800 hover:bg-white",
-    emerald: "bg-emerald-50 border-emerald-200 text-emerald-800 hover:bg-white",
-    amber: "bg-amber-50 border-amber-200 text-amber-800 hover:bg-white",
+    slate: "bg-slate-50 border-slate-200 text-slate-700",
+    blue: "bg-blue-50 border-blue-200 text-blue-800",
+    indigo: "bg-indigo-50 border-indigo-200 text-indigo-800",
+    emerald: "bg-emerald-50 border-emerald-200 text-emerald-800",
+    amber: "bg-amber-50 border-amber-200 text-amber-800",
   };
+  const inner = (
+    <>
+      <span className="font-mono text-[10px] font-bold opacity-70">{icon}</span>
+      <span>{label}</span>
+    </>
+  );
+  const cls = `inline-flex items-center gap-1.5 rounded-md border px-2 py-1 text-xs ${tones[tone]}`;
+  if (!href) {
+    return (
+      <span
+        className={`${cls} opacity-70`}
+        title="Original document didn't surface a URL for this entry"
+      >
+        {inner}
+      </span>
+    );
+  }
   return (
     <a
       href={href}
       target="_blank"
       rel="noopener noreferrer"
       title={href}
-      className={`inline-flex items-center gap-1.5 rounded-md border px-2 py-1 text-xs ${tones[tone]}`}
+      className={`${cls} hover:bg-white`}
     >
-      <span className="font-mono text-[10px] font-bold opacity-70">{icon}</span>
-      <span>{label}</span>
+      {inner}
     </a>
   );
 }

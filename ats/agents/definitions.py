@@ -42,7 +42,13 @@ def build_agents(s: Settings) -> dict[str, AgentDefinition]:
                 '  "experience": [{"company": str, "title": str, "start": "YYYY-MM"|null, "end": "YYYY-MM"|"present"|null, "bullets": [str]}],\n'
                 '  "skills": [str],\n'
                 '  "links": [str]\n'
-                "}\n\n" + JSON_ONLY
+                "}\n\n"
+                "links MUST be full URLs (http(s)://, mailto:, tel:). The "
+                "read_resume tool appends a 'LINKS:' section listing every URL "
+                "the document linked to — copy entries from that block VERBATIM. "
+                "Never emit visible labels like \"LinkedIn\" or \"GitHub\" as a "
+                "link string; that text is decoration, not the URL.\n"
+                + JSON_ONLY
             ),
             tools=[T_READ_RESUME],
             model=fast,
@@ -177,8 +183,23 @@ def build_agents(s: Settings) -> dict[str, AgentDefinition]:
                 '  "gaps": [{"after": "YYYY-MM", "before": "YYYY-MM", "months": int}],\n'
                 '  "overlaps": [{"a": str, "b": str, "months": int}],\n'
                 '  "inconsistencies": [str]\n'
-                "}\n"
-                "Only flag gaps > 6 months. Do NOT speculate about reasons.\n"
+                "}\n\n"
+                "Rules — read carefully:\n"
+                "- Only flag gaps > 6 months. Do NOT speculate about reasons.\n"
+                "- DO NOT flag a role as overlapping if its company name OR title "
+                "contains any of: '(Part-time)', '(Contract)', '(Freelance)', "
+                "'(Volunteer)', '(Advisor)', '(Consultant)', '(Side project)', "
+                "'(Open source)'. These are expected to coexist with full-time "
+                "roles — concurrent employment is the whole point.\n"
+                "- Same end-month and start-month between adjacent roles is a "
+                "normal handoff, NOT an overlap. Only flag overlap when two "
+                "clearly full-time roles share 2+ months of date range.\n"
+                "- 'Present' / current end dates are normal — do NOT flag a role "
+                "as inconsistent for ending in 'present' or for being open-ended. "
+                "Only flag when the resume itself contradicts a date (end before "
+                "start, two end dates for the same role, etc).\n"
+                "- Inconsistencies are date errors and contradictions, NOT "
+                "career-pattern judgments.\n"
                 + JSON_ONLY
             ),
             tools=[],
