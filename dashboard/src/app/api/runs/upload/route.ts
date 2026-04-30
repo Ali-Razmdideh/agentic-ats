@@ -4,6 +4,7 @@ import { requireUserAndOrg } from "@/lib/auth";
 import { putJd, putResume } from "@/lib/blob";
 import { createQueuedRun } from "@/lib/repo";
 import { RunUploadInput } from "@/lib/schema";
+import { appendAudit } from "@/lib/audit";
 
 export const runtime = "nodejs";
 export const maxDuration = 300; // up to 5 min for large multi-resume uploads
@@ -76,6 +77,21 @@ export async function POST(req: Request) {
     parsed.data.top_n,
     parsed.data.skip_optional,
   );
+
+  await appendAudit({
+    orgId: org.id,
+    actorUserId: user.id,
+    actorKind: "user",
+    kind: "run.submitted",
+    payload: {
+      jd_name: jd.name || "jd.txt",
+      resume_count: resumeKeys.length,
+      top_n: parsed.data.top_n,
+      skip_optional: parsed.data.skip_optional,
+    },
+    targetKind: "run",
+    targetId: runId,
+  });
 
   return relativeRedirect(`/runs/${runId}`);
 }

@@ -372,12 +372,26 @@ Shipped:
   summary panel (score gauge / verdict / pros / cons), rich
   visualizations for red flags / interview questions / GitHub enrichment
   / parsed resume, decision panel, comment threads, presigned MinIO
-  resume + JD downloads. Spec:
+  resume + JD downloads, dark theme with system-preference detection.
+  Spec:
   [`docs/superpowers/specs/2026-04-29-dashboard-design.md`](docs/superpowers/specs/2026-04-29-dashboard-design.md).
+- ✅ **Sub-project #5 (v1)** — append-only compliance log
+  (`audit_log` table, distinct from agent `audits`). Reviewer + worker
+  actions are recorded with actor / kind / target / payload + timestamp:
+  `auth.login` / `auth.logout` / `auth.signup`,
+  `run.submitted` / `run.started` / `run.completed` / `run.failed` /
+  `run.budget_exceeded`,
+  `decision.set`, `comment.added`. Admin-only viewer at
+  `/settings/audit` with kind + date-range filters; CSV export at
+  `/api/audit/export` streams the full filtered log for legal /
+  compliance purposes (NYC AEDT, EU AI Act). Tamper-evidence (HMAC
+  chain) deferred to #5b.
 
 Deferred:
 
-- ⏳ **Sub-project #5** — append-only signed audit log + compliance export.
+- ⏳ **Sub-project #5b** — HMAC-chained tamper-evidence on `audit_log`
+  (`prev_hash` + `hash` columns; cross-language canonical-JSON
+  contract) + a `/api/audit/verify` endpoint.
 - ⏳ Password reset by email, email verification, multi-org invitations.
 - ⏳ LinkedIn enricher (today the enricher is GitHub-only).
 - ⏳ Real-time updates (SSE / websockets) — the dashboard polls every 2.5s

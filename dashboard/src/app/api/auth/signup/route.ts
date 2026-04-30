@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { signup } from "@/lib/auth";
 import { SignupInput } from "@/lib/schema";
+import { appendAudit } from "@/lib/audit";
 
 export async function POST(req: Request) {
   const form = await req.formData();
@@ -16,14 +17,20 @@ export async function POST(req: Request) {
     );
   }
   try {
-    await signup(
+    const { user, org } = await signup(
       parsed.data.email,
       parsed.data.password,
       parsed.data.display_name,
     );
+    await appendAudit({
+      orgId: org.id,
+      actorUserId: user.id,
+      actorKind: "user",
+      kind: "auth.signup",
+      payload: { email: user.email, org_slug: org.slug },
+    });
   } catch (e) {
-    const code =
-      (e as Error).message === "EMAIL_TAKEN" ? "taken" : "unknown";
+    const code = (e as Error).message === "EMAIL_TAKEN" ? "taken" : "unknown";
     return NextResponse.redirect(
       new URL(`/signup?error=${code}`, req.url),
       303,

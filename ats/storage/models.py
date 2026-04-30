@@ -52,6 +52,12 @@ class DecisionKind(str, enum.Enum):
     hold = "hold"
 
 
+class ActorKind(str, enum.Enum):
+    user = "user"
+    worker = "worker"
+    system = "system"
+
+
 class Org(Base):
     __tablename__ = "orgs"
 
@@ -312,4 +318,37 @@ class CandidateComment(Base):
             ondelete="CASCADE",
             name="fk_candidate_comments_candidates",
         ),
+    )
+
+
+class AuditLog(Base):
+    """Append-only compliance log of reviewer actions.
+
+    Distinct from the existing ``audits`` table (which holds agent
+    outputs). This table records WHO did WHAT to WHICH target — the
+    raw material for legal / compliance reviews (NYC AEDT, EU AI Act).
+
+    v1 has no chain-hash; rows are append-only by convention (no
+    UPDATE/DELETE codepaths) but not cryptographically tamper-evident.
+    A future migration may add ``prev_hash`` + ``hash`` columns.
+    """
+
+    __tablename__ = "audit_log"
+
+    id: Mapped[int] = mapped_column(BigInteger, Identity(always=True), primary_key=True)
+    org_id: Mapped[int] = mapped_column(
+        BigInteger, ForeignKey("orgs.id", ondelete="CASCADE"), nullable=False
+    )
+    actor_user_id: Mapped[int | None] = mapped_column(
+        BigInteger, ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    actor_kind: Mapped[ActorKind] = mapped_column(
+        Enum(ActorKind, name="actor_kind_enum"), nullable=False
+    )
+    kind: Mapped[str] = mapped_column(Text, nullable=False)
+    target_kind: Mapped[str | None] = mapped_column(Text, nullable=True)
+    target_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    payload: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
     )

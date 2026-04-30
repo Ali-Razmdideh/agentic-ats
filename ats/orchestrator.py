@@ -171,6 +171,21 @@ async def run_pipeline(
             "run start",
             extra={"run_id": run_id, "jd_path": str(jd_path), "org_id": org_id},
         )
+        async with uow(sessionmaker, org_id) as repos:
+            from ats.storage.models import ActorKind
+
+            await repos.audit_log.append(
+                kind="run.started",
+                payload={
+                    "jd_path": str(jd_path),
+                    "skip_optional": skip_optional,
+                    "top_n": top_n,
+                },
+                actor_user_id=None,
+                actor_kind=ActorKind.worker,
+                target_kind="run",
+                target_id=run_id,
+            )
 
         options = _build_options(settings)
         enabled = (
@@ -476,15 +491,38 @@ async def run_pipeline(
                     summary["outreach"] = drafts
 
             async with uow(sessionmaker, org_id) as repos:
+                from ats.storage.models import ActorKind
+
                 await repos.runs.update_usage(run_id, usage.to_dict())
                 await repos.runs.finish(run_id, RunStatus.ok)
+                await repos.audit_log.append(
+                    kind="run.completed",
+                    payload={
+                        "candidates": len(summary.get("candidates", [])),
+                        "usage": usage.to_dict(),
+                    },
+                    actor_user_id=None,
+                    actor_kind=ActorKind.worker,
+                    target_kind="run",
+                    target_id=run_id,
+                )
             summary["status"] = "ok"
             summary["usage"] = usage.to_dict()
             return summary
         except BudgetExceeded as exc:
             async with uow(sessionmaker, org_id) as repos:
+                from ats.storage.models import ActorKind
+
                 await repos.runs.update_usage(run_id, usage.to_dict())
                 await repos.runs.finish(run_id, RunStatus.budget_exceeded)
+                await repos.audit_log.append(
+                    kind="run.budget_exceeded",
+                    payload={"usage": usage.to_dict(), "message": str(exc)[:500]},
+                    actor_user_id=None,
+                    actor_kind=ActorKind.worker,
+                    target_kind="run",
+                    target_id=run_id,
+                )
             summary["status"] = "budget_exceeded"
             summary["error"] = str(exc)
             return summary
@@ -499,6 +537,8 @@ async def run_pipeline(
             )
             try:
                 async with uow(sessionmaker, org_id) as repos:
+                    from ats.storage.models import ActorKind
+
                     await repos.runs.update_usage(run_id, usage.to_dict())
                     await repos.runs.finish(run_id, RunStatus.failed)
                     await repos.audits.write(
@@ -508,6 +548,17 @@ async def run_pipeline(
                             "error_type": type(exc).__name__,
                             "message": str(exc)[:2000],
                         },
+                    )
+                    await repos.audit_log.append(
+                        kind="run.failed",
+                        payload={
+                            "error_type": type(exc).__name__,
+                            "message": str(exc)[:2000],
+                        },
+                        actor_user_id=None,
+                        actor_kind=ActorKind.worker,
+                        target_kind="run",
+                        target_id=run_id,
                     )
             except Exception:  # pragma: no cover - last-resort safety
                 log.exception("failed to persist run failure", extra={"run_id": run_id})

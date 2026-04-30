@@ -6,6 +6,7 @@ import {
 } from "@/lib/auth";
 import { LoginInput } from "@/lib/schema";
 import { setActiveOrgCookie } from "@/lib/session";
+import { appendAudit } from "@/lib/audit";
 
 export async function POST(req: Request) {
   const form = await req.formData();
@@ -33,6 +34,13 @@ export async function POST(req: Request) {
   const memberships = await listMembershipsWithOrg(user.id);
   if (memberships.length > 0) {
     await setActiveOrgCookie(memberships[0]!.org.slug);
+    await appendAudit({
+      orgId: memberships[0]!.org.id,
+      actorUserId: user.id,
+      actorKind: "user",
+      kind: "auth.login",
+      payload: { email: user.email },
+    });
   }
   return NextResponse.redirect(new URL("/runs", req.url), 303);
 }

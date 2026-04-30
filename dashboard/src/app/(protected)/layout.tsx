@@ -32,9 +32,14 @@ export default async function ProtectedLayout({
               New run
             </Link>
             {role === "admin" && (
-              <Link href="/settings/orgs" className="hover:text-slate-900 dark:hover:text-slate-50">
-                Orgs
-              </Link>
+              <>
+                <Link href="/settings/orgs" className="hover:text-slate-900 dark:hover:text-slate-50">
+                  Orgs
+                </Link>
+                <Link href="/settings/audit" className="hover:text-slate-900 dark:hover:text-slate-50">
+                  Audit
+                </Link>
+              </>
             )}
           </nav>
           <div className="ml-auto flex items-center gap-4 text-sm">

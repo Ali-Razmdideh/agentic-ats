@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from .audit_log import AuditLogRepository
 from .audits import AuditRepository
 from .base import OrgScopedRepository
 from .candidates import CandidateRepository
@@ -16,6 +17,7 @@ from .shortlists import ShortlistRepository
 from .users import UserRepository
 
 __all__ = [
+    "AuditLogRepository",
     "AuditRepository",
     "CandidateCommentRepository",
     "CandidateRepository",

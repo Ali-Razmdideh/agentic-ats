@@ -21,6 +21,7 @@ from typing import AsyncIterator
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from ats.storage.repositories import (
+    AuditLogRepository,
     AuditRepository,
     CandidateCommentRepository,
     CandidateRepository,
@@ -44,6 +45,7 @@ class RepositoryBundle:
     scores: ScoreRepository
     shortlists: ShortlistRepository
     audits: AuditRepository
+    audit_log: AuditLogRepository
     decisions: DecisionRepository
     comments: CandidateCommentRepository
     orgs: OrgRepository
@@ -61,6 +63,7 @@ def _build_bundle(session: AsyncSession, org_id: int) -> RepositoryBundle:
         scores=ScoreRepository(session, org_id),
         shortlists=ShortlistRepository(session, org_id),
         audits=AuditRepository(session, org_id),
+        audit_log=AuditLogRepository(session, org_id),
         decisions=DecisionRepository(session, org_id),
         comments=CandidateCommentRepository(session, org_id),
         orgs=OrgRepository(session),
