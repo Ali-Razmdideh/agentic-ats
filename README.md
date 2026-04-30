@@ -401,8 +401,13 @@ Shipped:
 Deferred:
 - ⏳ Password reset by email, email verification, multi-org invitations.
 - ⏳ LinkedIn enricher (today the enricher is GitHub-only).
-- ⏳ Real-time updates (SSE / websockets) — the dashboard polls every 2.5s
-  while a run is `queued` / `running`.
+- ✅ **Real-time updates (SSE)** — the run-detail page now opens a single
+  `EventSource` against `/api/runs/:id/stream` instead of polling. Server
+  diffs the run's (status, scored count, audit count) every 1s and pushes
+  an `update` event only on change; emits `done` and closes when the run
+  reaches a terminal status. 15s heartbeat keepalives so corporate
+  proxies don't drop the idle TCP. WebSockets / Postgres LISTEN-NOTIFY
+  remain a future optimisation.
 
 ---
 
