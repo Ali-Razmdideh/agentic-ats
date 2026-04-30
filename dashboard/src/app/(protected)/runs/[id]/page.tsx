@@ -12,6 +12,7 @@ import {
 import StatusBadge from "@/components/StatusBadge";
 import RunStatusPoller from "@/components/RunStatusPoller";
 import PipelineProgress from "@/components/PipelineProgress";
+import RunJobDescription from "@/components/RunJobDescription";
 import type { Decision } from "@/lib/types";
 
 async function hasShortlistRows(orgId: number, runId: number): Promise<boolean> {
@@ -53,6 +54,7 @@ export default async function RunDetailPage({
   const isPending = run.status === "queued" || run.status === "running";
 
   const bias = audits.find((a) => a.kind === "bias");
+  const jdParsed = audits.find((a) => a.kind === "jd_parsed")?.payload;
 
   const expectedCandidates = run.queued_inputs?.resume_blob_keys?.length ?? scores.length;
   const skipOptional = run.queued_inputs?.skip_optional ?? false;
@@ -60,12 +62,7 @@ export default async function RunDetailPage({
   return (
     <div className="space-y-8">
       <div className="flex items-start justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold">Run #{run.id}</h1>
-          <p className="text-sm text-slate-500">
-            JD: <span className="font-mono">{run.jd_path}</span>
-          </p>
-        </div>
+        <h1 className="text-2xl font-semibold">Run #{run.id}</h1>
         <div className="flex flex-col items-end gap-1">
           <StatusBadge status={run.status} />
           <p className="text-xs text-slate-500">
@@ -75,6 +72,12 @@ export default async function RunDetailPage({
       </div>
 
       {isPending && <RunStatusPoller runId={run.id} />}
+
+      <RunJobDescription
+        jdParsedPayload={jdParsed}
+        jdPath={run.jd_path}
+        jdBlobKey={run.jd_blob_key}
+      />
 
       <PipelineProgress
         status={run.status}
