@@ -198,16 +198,18 @@ async def invoke_agent(
                 try:
                     model = coerce_to_model(agent, raw)
                 except CoercionFailedError as exc:
+                    raw_str = str(exc.raw)[:1500] if exc.raw is not None else ""
                     log.warning(
-                        "agent output unusable; retrying",
+                        "agent output unusable; retrying. agent=%s attempt=%d raw=%s",
+                        agent,
+                        attempt.retry_state.attempt_number,
+                        raw_str,
                         extra={
                             "run_id": run_id,
                             "candidate_id": candidate_id,
                             "agent": agent,
                             "attempt": attempt.retry_state.attempt_number,
-                            "raw_preview": (
-                                str(exc.raw)[:500] if exc.raw is not None else ""
-                            ),
+                            "raw_preview": raw_str,
                         },
                     )
                     raise
