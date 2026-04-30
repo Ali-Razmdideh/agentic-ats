@@ -245,6 +245,34 @@ def build_agents(s: Settings) -> dict[str, AgentDefinition]:
             tools=["WebFetch"],
             model=fast,
         ),
+        "linkedin_enricher": AgentDefinition(
+            description="Best-effort signals from a public LinkedIn URL (optional).",
+            prompt=(
+                "Input: {linkedin_url}. Use WebFetch on the URL.\n\n"
+                "LinkedIn gates most data behind login, but the public "
+                "profile page often exposes og:title and og:description "
+                "meta tags that include the person's name, current job "
+                "title, current company, and headline. Extract whatever "
+                "is visible without speculation.\n\n"
+                "Output JSON:\n"
+                "{\n"
+                '  "public_url": str,        // echo the input URL\n'
+                '  "headline": str|null,     // og:description first line, e.g. '
+                '"Senior ML Engineer"\n'
+                '  "current_title": str|null,\n'
+                '  "current_company": str|null,\n'
+                '  "location": str|null,\n'
+                '  "error": str|null         // "login_wall"|"not_found"|"blocked" '
+                "if data unavailable\n"
+                "}\n\n"
+                "If WebFetch returns the LinkedIn auth wall (sign-up / login "
+                "prompt with no profile data), set error=\"login_wall\" and "
+                "leave the rest null. Don't fabricate fields.\n"
+                + JSON_ONLY
+            ),
+            tools=["WebFetch"],
+            model=fast,
+        ),
     }
 
 
@@ -257,4 +285,5 @@ OPTIONAL = [
     "interview_qs",
     "outreach",
     "enricher",
+    "linkedin_enricher",
 ]

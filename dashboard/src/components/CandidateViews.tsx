@@ -650,3 +650,100 @@ function Stat({ label, value }: { label: string; value: number }) {
     </div>
   );
 }
+
+// ---------- LinkedIn enrichment -------------------------------------------
+
+const LI_ERROR_LABEL: Record<string, string> = {
+  login_wall:
+    "LinkedIn returned its sign-up page (anti-scraping). Click through to view the public profile.",
+  not_found:
+    "LinkedIn returned 404 for this URL. The handle may have been renamed or removed.",
+  blocked:
+    "LinkedIn blocked the fetch. Click through to view the public profile.",
+};
+
+export function LinkedInView({ payload }: { payload: unknown }) {
+  const p = asObject(payload);
+  const url = asString(p.public_url);
+  const headline = asString(p.headline);
+  const title = asString(p.current_title);
+  const company = asString(p.current_company);
+  const location = asString(p.location);
+  const error = asString(p.error);
+
+  if (!url && !error && !headline && !title && !company) {
+    return (
+      <p className="text-sm italic text-slate-500 dark:text-slate-400">
+        No LinkedIn signals available.
+      </p>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      {url && (
+        <div className="flex items-center justify-between gap-3 rounded-md border border-blue-200 bg-blue-50 p-3 text-sm dark:border-blue-900 dark:bg-blue-950/40">
+          <span className="font-mono text-xs text-blue-900 dark:text-blue-100">
+            {url}
+          </span>
+          <a
+            href={url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="rounded-md border border-blue-300 bg-white px-3 py-1 text-xs font-medium text-blue-800 hover:bg-blue-100 dark:border-blue-800 dark:bg-blue-900 dark:text-blue-100 dark:hover:bg-blue-800"
+          >
+            View on LinkedIn ↗
+          </a>
+        </div>
+      )}
+
+      {error ? (
+        <div className="rounded-md border border-amber-300 bg-amber-50 p-3 text-sm dark:border-amber-800 dark:bg-amber-950/40">
+          <p className="font-semibold text-amber-900 dark:text-amber-100">
+            LinkedIn data unavailable
+            <span className="ml-1.5 font-mono text-[10px] uppercase tracking-wide text-amber-700 dark:text-amber-300">
+              {error}
+            </span>
+          </p>
+          <p className="mt-1 text-amber-800 dark:text-amber-200">
+            {LI_ERROR_LABEL[error] ??
+              "LinkedIn rejected the public fetch. The reviewer can still open the profile manually."}
+          </p>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          {headline && (
+            <Field2 label="Headline" value={headline} />
+          )}
+          {title && <Field2 label="Current title" value={title} />}
+          {company && (
+            <Field2 label="Current company" value={company} />
+          )}
+          {location && <Field2 label="Location" value={location} />}
+        </div>
+      )}
+
+      <p className="text-[11px] italic text-slate-500 dark:text-slate-400">
+        LinkedIn gates most profile data behind login. For richer
+        enrichment (full work history, skills), point the
+        <code className="mx-0.5 rounded bg-slate-100 px-1 dark:bg-slate-800">
+          linkedin_enricher
+        </code>
+        agent at a paid scraping provider.
+      </p>
+    </div>
+  );
+}
+
+function Field2({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-md border border-slate-200 bg-white p-3 dark:border-slate-800 dark:bg-slate-900">
+      <p className="text-[11px] uppercase tracking-wide text-slate-500 dark:text-slate-400">
+        {label}
+      </p>
+      <p className="mt-0.5 text-sm text-slate-900 dark:text-slate-50">
+        {value}
+      </p>
+    </div>
+  );
+}

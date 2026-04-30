@@ -16,6 +16,7 @@ import CandidateSummary from "@/components/CandidateSummary";
 import {
   EnrichmentView,
   InterviewQuestionsView,
+  LinkedInView,
   ParsedResumeView,
   RedFlagsView,
 } from "@/components/CandidateViews";
@@ -54,6 +55,9 @@ export default async function CandidateDetailPage({
   )?.payload;
   const enrichment = audits.find(
     (a) => a.kind === `enricher:${candId}`,
+  )?.payload;
+  const linkedin = audits.find(
+    (a) => a.kind === `linkedin_enricher:${candId}`,
   )?.payload;
 
   return (
@@ -109,6 +113,12 @@ export default async function CandidateDetailPage({
       {enrichment != null && (
         <Section title="GitHub enrichment">
           <EnrichmentView payload={enrichment} />
+        </Section>
+      )}
+
+      {linkedin != null && (
+        <Section title="LinkedIn">
+          <LinkedInView payload={linkedin} />
         </Section>
       )}
 

@@ -20,6 +20,7 @@ from ats.agents.schemas import (
     EnrichmentResult,
     InterviewResult,
     JDParsed,
+    LinkedInEnrichmentResult,
     MatchResult,
     OutreachDraft,
     ParsedResume,
@@ -411,6 +412,42 @@ async def run_pipeline(
                                         run_id, f"enricher:{cid}", enr
                                     )
                                 cand_summary["enrichment"] = enr
+
+                    if "linkedin_enricher" in enabled:
+                        # Match the canonical /in/ profile URLs only —
+                        # /company/, /pub/, /jobs/ etc. aren't person
+                        # pages. Anti-SSRF: re-validate the URL host so
+                        # a crafted resume with linkedin.com.evil.tld in
+                        # the link text doesn't slip past WebFetch.
+                        li_urls = [
+                            link
+                            for link in cand["parsed"].get("links", [])
+                            if "linkedin.com/in/" in link
+                        ]
+                        if li_urls:
+                            url = li_urls[0]
+                            host = url.split("/")[2] if "://" in url else ""
+                            if host in {"linkedin.com", "www.linkedin.com"}:
+                                li_model = await call(
+                                    client,
+                                    "linkedin_enricher",
+                                    json.dumps({"linkedin_url": url}),
+                                    candidate_id=cid,
+                                )
+                                assert isinstance(
+                                    li_model, LinkedInEnrichmentResult
+                                )
+                                li = _to_jsonable(li_model)
+                                async with uow(sessionmaker, org_id) as repos:
+                                    await repos.audits.write(
+                                        run_id, f"linkedin_enricher:{cid}", li
+                                    )
+                                cand_summary["linkedin"] = li
+                            else:
+                                log.warning(
+                                    "linkedin_enricher: rejecting non-canonical host",
+                                    extra={"candidate_id": cid, "host": host},
+                                )
 
                     return cand_summary
 

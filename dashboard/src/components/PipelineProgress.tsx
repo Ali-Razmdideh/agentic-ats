@@ -38,6 +38,7 @@ function buildStages(p: Omit<Props, "events">): Stage[] {
   const redFlagsCount = countByPrefix(p.audits, "red_flags:");
   const interviewQsCount = countByPrefix(p.audits, "interview_qs:");
   const enricherCount = countByPrefix(p.audits, "enricher:");
+  const linkedinCount = countByPrefix(p.audits, "linkedin_enricher:");
   const dedupPresent = hasKind(p.audits, "dedup");
   const isFinished =
     p.status === "ok" ||
@@ -131,6 +132,19 @@ function buildStages(p: Omit<Props, "events">): Stage[] {
               : "pending",
         detail: enricherCount > 0 ? `${enricherCount} / ${total}` : undefined,
       },
+      {
+        id: "linkedin_enricher",
+        label: "LinkedIn enrichment",
+        state:
+          linkedinCount > 0
+            ? isFinished
+              ? "done"
+              : "in_progress"
+            : isFinished
+              ? "skipped"
+              : "pending",
+        detail: linkedinCount > 0 ? `${linkedinCount} / ${total}` : undefined,
+      },
     );
   }
 
@@ -172,6 +186,9 @@ function prettyKind(kind: string): string {
   }
   if (kind.startsWith("enricher:")) {
     return `GitHub enrichment · candidate #${kind.split(":")[1]}`;
+  }
+  if (kind.startsWith("linkedin_enricher:")) {
+    return `LinkedIn enrichment · candidate #${kind.split(":")[1]}`;
   }
   return kind;
 }

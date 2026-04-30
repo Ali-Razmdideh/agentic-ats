@@ -310,7 +310,7 @@ the worker exists so the dashboard can hand-off long-running screening jobs.
 |------|--------|
 | **Needed** | parser, jd_analyzer, matcher, ranker |
 | **Recommended** | verifier, bias_auditor, deduper |
-| **Optional** | taxonomy, summarizer, red_flags, interview_qs, outreach, enricher |
+| **Optional** | taxonomy, summarizer, red_flags, interview_qs, outreach, enricher, linkedin_enricher |
 
 `--skip-optional` runs Needed + Recommended only.
 
@@ -400,7 +400,16 @@ Shipped:
 
 Deferred:
 - ⏳ Password reset by email, email verification, multi-org invitations.
-- ⏳ LinkedIn enricher (today the enricher is GitHub-only).
+- ✅ **LinkedIn enricher** — best-effort signals (`headline`,
+  `current_title`, `current_company`, `location`) from a public
+  LinkedIn URL via WebFetch on the og: meta tags. LinkedIn's auth
+  wall means the agent often returns `error: "login_wall"`; the UI
+  falls back to a "View on LinkedIn" link card with a hint that
+  richer data needs a paid scraping provider (Proxycurl etc.) — the
+  agent's prompt is the only thing to swap for that. New OPTIONAL
+  agent `linkedin_enricher`; new audit kind
+  `linkedin_enricher:<cid>`; new "LinkedIn enrichment" stage in the
+  pipeline progress panel.
 - ✅ **Real-time updates (SSE + Postgres LISTEN/NOTIFY)** — the run-detail
   page opens a single `EventSource` against `/api/runs/:id/stream`.
   Triggers on `runs` / `audits` / `scores` / `shortlists` emit

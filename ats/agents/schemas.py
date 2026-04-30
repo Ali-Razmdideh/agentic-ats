@@ -199,6 +199,26 @@ class EnrichmentResult(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
 
+class LinkedInEnrichmentResult(BaseModel):
+    """Best-effort signals from a public LinkedIn URL.
+
+    LinkedIn gates most data behind login. Production deployments
+    that need full profile data should swap the agent's prompt for a
+    paid scraping provider (Proxycurl etc.) and add the API key as a
+    new MCP tool. The default flow uses ``WebFetch`` and parses the
+    ``og:`` meta tags that often leak through the auth wall.
+    """
+
+    public_url: str = ""
+    headline: str | None = None
+    current_title: str | None = None
+    current_company: str | None = None
+    location: str | None = None
+    error: str | None = None
+
+    model_config = ConfigDict(extra="ignore")
+
+
 # ------------------------------- Registry ------------------------------------
 
 AGENT_SCHEMAS: dict[str, type[BaseModel]] = {
@@ -215,6 +235,7 @@ AGENT_SCHEMAS: dict[str, type[BaseModel]] = {
     "interview_qs": InterviewResult,
     "outreach": OutreachDraft,
     "enricher": EnrichmentResult,
+    "linkedin_enricher": LinkedInEnrichmentResult,
 }
 
 
@@ -235,8 +256,10 @@ def _looks_degenerate(agent: str, model: BaseModel) -> bool:
     if agent == "jd_analyzer":
         d = model.model_dump()
         empty_text = not (d.get("role_family") or "").strip()
-        empty_lists = not d.get("must_have") and not d.get("nice_to_have") and not d.get(
-            "responsibilities"
+        empty_lists = (
+            not d.get("must_have")
+            and not d.get("nice_to_have")
+            and not d.get("responsibilities")
         )
         return empty_text and empty_lists
     if agent == "parser":
