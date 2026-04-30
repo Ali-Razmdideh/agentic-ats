@@ -6,6 +6,24 @@ import { createQueuedRun } from "@/lib/repo";
 import { RunUploadInput } from "@/lib/schema";
 
 export const runtime = "nodejs";
+export const maxDuration = 300; // up to 5 min for large multi-resume uploads
+
+/** Build a 303 redirect with a relative Location header.
+ *
+ * NextResponse.redirect() needs an absolute URL, and `new URL(path, req.url)`
+ * resolves against `req.url` — which inside a container with
+ * HOSTNAME=0.0.0.0 can come back as ``http://0.0.0.0:3000/...``. The
+ * browser then follows the Location to ``0.0.0.0`` and displays an
+ * "empty page" error because that address isn't routable client-side.
+ * A relative Location is resolved by the browser against the URL
+ * it actually requested, so it always lands back on the right host.
+ */
+function relativeRedirect(path: string): Response {
+  return new Response(null, {
+    status: 303,
+    headers: { Location: path },
+  });
+}
 
 export async function POST(req: Request) {
   const { user, org } = await requireUserAndOrg();
@@ -16,31 +34,37 @@ export async function POST(req: Request) {
     skip_optional: form.get("skip_optional") ?? false,
   });
   if (!parsed.success) {
-    return NextResponse.redirect(
-      new URL("/runs/new?error=validation", req.url),
-      303,
-    );
+    return relativeRedirect("/runs/new?error=validation");
   }
 
   const jd = form.get("jd");
-  const resumes = form.getAll("resumes").filter((f) => f instanceof File) as File[];
+  const resumes = form
+    .getAll("resumes")
+    .filter((f) => f instanceof File) as File[];
   if (!(jd instanceof File) || resumes.length === 0) {
-    return NextResponse.redirect(
-      new URL("/runs/new?error=missing+files", req.url),
-      303,
-    );
+    return relativeRedirect("/runs/new?error=missing+files");
   }
 
-  const jdBytes = Buffer.from(await jd.arrayBuffer());
-  const jdKey = await putJd(org.id, jdBytes, jd.name || "jd.txt");
+  // Read every uploaded file into memory in parallel; multipart form
+  // parsing has already buffered them, so this is just promise plumbing.
+  const [jdBytes, resumeBuffers] = await Promise.all([
+    jd.arrayBuffer().then((b) => Buffer.from(b)),
+    Promise.all(
+      resumes.map((r) =>
+        r.arrayBuffer().then((b) => ({ name: r.name || "resume", buf: Buffer.from(b) })),
+      ),
+    ),
+  ]);
   const jdHash = createHash("sha256").update(jdBytes).digest("hex");
 
-  const resumeKeys: string[] = [];
-  for (const r of resumes) {
-    const bytes = Buffer.from(await r.arrayBuffer());
-    const key = await putResume(org.id, bytes, r.name || "resume");
-    resumeKeys.push(key);
-  }
+  // Upload JD + every resume to MinIO in parallel. Was sequential — at
+  // ~250–500ms per blob, four resumes turned a 0.5s round-trip into 2–3s,
+  // long enough that the browser's wait-for-redirect timer fired before
+  // Next responded with the 303.
+  const [jdKey, ...resumeKeys] = await Promise.all([
+    putJd(org.id, jdBytes, jd.name || "jd.txt"),
+    ...resumeBuffers.map((rb) => putResume(org.id, rb.buf, rb.name)),
+  ]);
 
   const runId = await createQueuedRun(
     org.id,
@@ -53,5 +77,10 @@ export async function POST(req: Request) {
     parsed.data.skip_optional,
   );
 
-  return NextResponse.redirect(new URL(`/runs/${runId}`, req.url), 303);
+  return relativeRedirect(`/runs/${runId}`);
 }
+
+// Type the unused import as referenced so eslint/tsc don't complain;
+// kept for future where we might want to call NextResponse for non-redirect
+// branches.
+void NextResponse;
