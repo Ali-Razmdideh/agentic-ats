@@ -4,6 +4,7 @@
 import { pool, withTx } from "@/lib/db";
 import type {
   AuditEntry,
+  AuditEvent,
   Candidate,
   CandidateComment,
   Decision,
@@ -119,6 +120,22 @@ export async function listAuditsForRun(
       WHERE org_id = $1 AND run_id = $2
       ORDER BY id`,
     [orgId, runId],
+  );
+  return res.rows;
+}
+
+/** Lightweight audit event list for the pipeline timeline. */
+export async function listAuditEventsForRun(
+  orgId: number,
+  runId: number,
+  limit = 50,
+): Promise<AuditEvent[]> {
+  const res = await pool.query<AuditEvent>(
+    `SELECT id, kind, created_at FROM audits
+      WHERE org_id = $1 AND run_id = $2
+      ORDER BY id DESC
+      LIMIT $3`,
+    [orgId, runId, limit],
   );
   return res.rows;
 }

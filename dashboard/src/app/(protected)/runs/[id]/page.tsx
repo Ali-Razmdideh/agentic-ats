@@ -1,15 +1,28 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { requireUserAndOrg } from "@/lib/auth";
+import { pool } from "@/lib/db";
 import {
   getRun,
+  listAuditEventsForRun,
   listAuditsForRun,
   listDecisionsForRun,
   listScoresForRun,
 } from "@/lib/repo";
 import StatusBadge from "@/components/StatusBadge";
 import RunStatusPoller from "@/components/RunStatusPoller";
+import PipelineProgress from "@/components/PipelineProgress";
 import type { Decision } from "@/lib/types";
+
+async function hasShortlistRows(orgId: number, runId: number): Promise<boolean> {
+  const r = await pool.query<{ exists: boolean }>(
+    `SELECT EXISTS (
+        SELECT 1 FROM shortlists WHERE org_id = $1 AND run_id = $2
+     ) AS exists`,
+    [orgId, runId],
+  );
+  return r.rows[0]?.exists === true;
+}
 
 export const dynamic = "force-dynamic";
 
@@ -26,10 +39,12 @@ export default async function RunDetailPage({
   const run = await getRun(org.id, runId);
   if (!run) notFound();
 
-  const [scores, audits, decisions] = await Promise.all([
+  const [scores, audits, decisions, events, shortlistsExist] = await Promise.all([
     listScoresForRun(org.id, runId),
     listAuditsForRun(org.id, runId),
     listDecisionsForRun(org.id, runId),
+    listAuditEventsForRun(org.id, runId, 50),
+    hasShortlistRows(org.id, runId),
   ]);
   const decisionByCandidate = new Map<number, Decision>(
     decisions.map((d) => [d.candidate_id, d]),
@@ -38,6 +53,9 @@ export default async function RunDetailPage({
   const isPending = run.status === "queued" || run.status === "running";
 
   const bias = audits.find((a) => a.kind === "bias");
+
+  const expectedCandidates = run.queued_inputs?.resume_blob_keys?.length ?? scores.length;
+  const skipOptional = run.queued_inputs?.skip_optional ?? false;
 
   return (
     <div className="space-y-8">
@@ -57,6 +75,16 @@ export default async function RunDetailPage({
       </div>
 
       {isPending && <RunStatusPoller runId={run.id} />}
+
+      <PipelineProgress
+        status={run.status}
+        expectedCandidates={expectedCandidates}
+        skipOptional={skipOptional}
+        scores={scores}
+        audits={audits}
+        events={events}
+        hasShortlists={shortlistsExist}
+      />
 
       {bias && (
         <section className="rounded-xl border border-slate-200 bg-white p-4">

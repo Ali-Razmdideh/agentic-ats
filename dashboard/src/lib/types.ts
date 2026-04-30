@@ -97,3 +97,9 @@ export interface AuditEntry {
   kind: string;
   payload: Record<string, unknown>;
 }
+
+export interface AuditEvent {
+  id: number;
+  kind: string;
+  created_at: string;
+}
