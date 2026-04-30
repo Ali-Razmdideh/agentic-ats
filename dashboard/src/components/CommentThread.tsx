@@ -47,25 +47,41 @@ export default function CommentThread({
   return (
     <div className="space-y-4">
       {comments.length === 0 ? (
-        <p className="text-sm text-slate-500">No comments yet.</p>
+        <p className="text-sm italic text-slate-500">No comments yet.</p>
       ) : (
         <ul className="space-y-3">
-          {comments.map((c) => (
-            <li
-              key={c.id}
-              className="rounded-md border border-slate-200 bg-slate-50 p-3"
-            >
-              <div className="flex items-center justify-between text-xs text-slate-500">
-                <span className="font-medium text-slate-700">
-                  {c.author_email || "—"}
+          {comments.map((c) => {
+            const isMine = c.author_email === currentUserEmail;
+            const initials = (c.author_email || "?")
+              .split("@")[0]!
+              .slice(0, 2)
+              .toUpperCase();
+            return (
+              <li key={c.id} className="flex gap-3">
+                <span
+                  className={`mt-0.5 inline-flex h-8 w-8 flex-none items-center justify-center rounded-full text-xs font-semibold text-white ${isMine ? "bg-slate-900" : "bg-indigo-500"}`}
+                >
+                  {initials}
                 </span>
-                <span>{new Date(c.created_at).toLocaleString()}</span>
-              </div>
-              <p className="mt-1 whitespace-pre-wrap text-sm text-slate-800">
-                {c.body}
-              </p>
-            </li>
-          ))}
+                <div className="flex-1 rounded-md border border-slate-200 bg-white p-3">
+                  <div className="flex items-baseline justify-between gap-3 text-xs text-slate-500">
+                    <span className="font-medium text-slate-800">
+                      {c.author_email || "—"}
+                      {isMine && (
+                        <span className="ml-1 text-[10px] uppercase tracking-wide text-slate-400">
+                          you
+                        </span>
+                      )}
+                    </span>
+                    <time>{new Date(c.created_at).toLocaleString()}</time>
+                  </div>
+                  <p className="mt-1.5 whitespace-pre-wrap text-sm leading-relaxed text-slate-800">
+                    {c.body}
+                  </p>
+                </div>
+              </li>
+            );
+          })}
         </ul>
       )}
       <div>

@@ -12,6 +12,12 @@ import {
 import DecisionPanel from "@/components/DecisionPanel";
 import CommentThread from "@/components/CommentThread";
 import ResumeDownload from "@/components/ResumeDownload";
+import {
+  EnrichmentView,
+  InterviewQuestionsView,
+  ParsedResumeView,
+  RedFlagsView,
+} from "@/components/CandidateViews";
 
 export const dynamic = "force-dynamic";
 
@@ -95,32 +101,24 @@ export default async function CandidateDetailPage({
 
       {redFlags != null && (
         <Section title="Red flags">
-          <pre className="max-h-60 overflow-auto rounded bg-slate-50 p-3 text-xs">
-            {JSON.stringify(redFlags, null, 2)}
-          </pre>
+          <RedFlagsView payload={redFlags} />
         </Section>
       )}
 
       {interviewQs != null && (
         <Section title="Interview questions">
-          <pre className="max-h-60 overflow-auto rounded bg-slate-50 p-3 text-xs">
-            {JSON.stringify(interviewQs, null, 2)}
-          </pre>
+          <InterviewQuestionsView payload={interviewQs} />
         </Section>
       )}
 
       {enrichment != null && (
         <Section title="GitHub enrichment">
-          <pre className="max-h-60 overflow-auto rounded bg-slate-50 p-3 text-xs">
-            {JSON.stringify(enrichment, null, 2)}
-          </pre>
+          <EnrichmentView payload={enrichment} />
         </Section>
       )}
 
       <Section title="Parsed resume">
-        <pre className="max-h-96 overflow-auto rounded bg-slate-50 p-3 text-xs">
-          {JSON.stringify(candidate.parsed, null, 2)}
-        </pre>
+        <ParsedResumeView parsed={candidate.parsed} />
       </Section>
 
       <Section title="Comments">
