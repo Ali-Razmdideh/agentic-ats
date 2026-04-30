@@ -66,10 +66,17 @@ export interface Candidate {
   parsed: Record<string, unknown> | null;
 }
 
+export interface VerifierPayload {
+  verified?: string[];
+  hallucinated?: string[];
+  adjusted_score?: number;
+}
+
 export interface ScoreRow {
   candidate_id: number;
   score: number;
   rationale: string | null;
+  verified: VerifierPayload | null;
   name: string | null;
   email: string | null;
 }

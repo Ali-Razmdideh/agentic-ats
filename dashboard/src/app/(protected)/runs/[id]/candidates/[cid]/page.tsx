@@ -12,6 +12,7 @@ import {
 import DecisionPanel from "@/components/DecisionPanel";
 import CommentThread from "@/components/CommentThread";
 import ResumeDownload from "@/components/ResumeDownload";
+import CandidateSummary from "@/components/CandidateSummary";
 import {
   EnrichmentView,
   InterviewQuestionsView,
@@ -74,15 +75,17 @@ export default async function CandidateDetailPage({
             </p>
           </div>
           <div className="flex flex-col items-end gap-2">
-            {score && (
-              <span className="text-3xl font-semibold tabular-nums">
-                {score.score.toFixed(2)}
-              </span>
-            )}
             <ResumeDownload blobKey={candidate.file_blob_key} />
           </div>
         </div>
       </div>
+
+      <CandidateSummary
+        score={score}
+        redFlagsPayload={redFlags}
+        enrichmentPayload={enrichment}
+        decision={decision}
+      />
 
       <DecisionPanel
         runId={runId}
@@ -90,14 +93,6 @@ export default async function CandidateDetailPage({
         currentDecision={decision?.decision ?? null}
         currentNotes={decision?.notes ?? ""}
       />
-
-      {score?.rationale && (
-        <Section title="Match rationale">
-          <p className="text-sm leading-relaxed text-slate-700">
-            {score.rationale}
-          </p>
-        </Section>
-      )}
 
       {redFlags != null && (
         <Section title="Red flags">

@@ -98,7 +98,7 @@ export async function listScoresForRun(
   runId: number,
 ): Promise<ScoreRow[]> {
   const res = await pool.query<ScoreRow>(
-    `SELECT s.candidate_id, s.score, s.rationale,
+    `SELECT s.candidate_id, s.score, s.rationale, s.verified,
             c.name, c.email
        FROM scores s
        JOIN candidates c ON c.id = s.candidate_id AND c.org_id = s.org_id
