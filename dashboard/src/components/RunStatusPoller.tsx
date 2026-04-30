@@ -35,7 +35,7 @@ export default function RunStatusPoller({ runId }: { runId: number }) {
     };
   }, [runId, router]);
   return (
-    <div className="flex items-center gap-2 rounded-md border border-blue-200 bg-blue-50 p-2 text-sm text-blue-900">
+    <div className="flex items-center gap-2 rounded-md border border-blue-200 dark:border-blue-900 bg-blue-50 dark:bg-blue-950/40 p-2 text-sm text-blue-900 dark:text-blue-100">
       <span className="h-2 w-2 animate-pulse rounded-full bg-blue-500" />
       Worker is processing this run — page refreshes automatically.
     </div>

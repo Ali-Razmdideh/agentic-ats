@@ -47,7 +47,7 @@ export default function CommentThread({
   return (
     <div className="space-y-4">
       {comments.length === 0 ? (
-        <p className="text-sm italic text-slate-500">No comments yet.</p>
+        <p className="text-sm italic text-slate-500 dark:text-slate-400">No comments yet.</p>
       ) : (
         <ul className="space-y-3">
           {comments.map((c) => {
@@ -59,23 +59,23 @@ export default function CommentThread({
             return (
               <li key={c.id} className="flex gap-3">
                 <span
-                  className={`mt-0.5 inline-flex h-8 w-8 flex-none items-center justify-center rounded-full text-xs font-semibold text-white ${isMine ? "bg-slate-900" : "bg-indigo-500"}`}
+                  className={`mt-0.5 inline-flex h-8 w-8 flex-none items-center justify-center rounded-full text-xs font-semibold text-white ${isMine ? "bg-slate-900 dark:bg-slate-100 dark:text-slate-900" : "bg-indigo-500"}`}
                 >
                   {initials}
                 </span>
-                <div className="flex-1 rounded-md border border-slate-200 bg-white p-3">
-                  <div className="flex items-baseline justify-between gap-3 text-xs text-slate-500">
-                    <span className="font-medium text-slate-800">
+                <div className="flex-1 rounded-md border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-3">
+                  <div className="flex items-baseline justify-between gap-3 text-xs text-slate-500 dark:text-slate-400">
+                    <span className="font-medium text-slate-800 dark:text-slate-100">
                       {c.author_email || "—"}
                       {isMine && (
-                        <span className="ml-1 text-[10px] uppercase tracking-wide text-slate-400">
+                        <span className="ml-1 text-[10px] uppercase tracking-wide text-slate-400 dark:text-slate-500">
                           you
                         </span>
                       )}
                     </span>
                     <time>{new Date(c.created_at).toLocaleString()}</time>
                   </div>
-                  <p className="mt-1.5 whitespace-pre-wrap text-sm leading-relaxed text-slate-800">
+                  <p className="mt-1.5 whitespace-pre-wrap text-sm leading-relaxed text-slate-800 dark:text-slate-100">
                     {c.body}
                   </p>
                 </div>
@@ -90,17 +90,17 @@ export default function CommentThread({
           onChange={(e) => setDraft(e.target.value)}
           placeholder={`Comment as ${currentUserEmail}…`}
           rows={3}
-          className="block w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-slate-900 focus:outline-none focus:ring-1 focus:ring-slate-900"
+          className="block w-full rounded-md border border-slate-300 dark:border-slate-700 px-3 py-2 text-sm focus:border-slate-900 dark:focus:border-slate-100 focus:outline-none focus:ring-1 focus:ring-slate-900 dark:focus:ring-slate-100"
         />
         {error && (
-          <p className="mt-1 text-xs text-red-700">{error}</p>
+          <p className="mt-1 text-xs text-red-700 dark:text-red-300">{error}</p>
         )}
         <div className="mt-2 text-right">
           <button
             type="button"
             disabled={pending || !draft.trim()}
             onClick={submit}
-            className="rounded-md bg-slate-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-slate-800 disabled:opacity-50"
+            className="rounded-md bg-slate-900 dark:bg-slate-100 dark:text-slate-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-slate-800 dark:hover:bg-slate-700 disabled:opacity-50"
           >
             Post comment
           </button>

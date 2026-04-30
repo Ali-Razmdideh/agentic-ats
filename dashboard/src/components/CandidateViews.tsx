@@ -67,7 +67,7 @@ function Bar({
     blue: "bg-blue-500",
   };
   return (
-    <div className="h-1.5 w-full overflow-hidden rounded-full bg-slate-100">
+    <div className="h-1.5 w-full overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800">
       <div
         className={`h-full rounded-full ${tones[tone]}`}
         style={{ width: `${pct}%` }}
@@ -90,7 +90,7 @@ export function ParsedResumeView({ parsed }: { parsed: unknown }) {
   return (
     <div className="space-y-6">
       {/* Contact card */}
-      <div className="grid grid-cols-1 gap-3 rounded-md bg-slate-50 p-3 text-sm sm:grid-cols-4">
+      <div className="grid grid-cols-1 gap-3 rounded-md bg-slate-50 dark:bg-slate-950 p-3 text-sm sm:grid-cols-4">
         <Field label="Name" value={asString(contact.name) || "—"} />
         <Field label="Email" value={asString(contact.email) || "—"} mono />
         <Field label="Phone" value={asString(contact.phone) || "—"} mono />
@@ -98,7 +98,7 @@ export function ParsedResumeView({ parsed }: { parsed: unknown }) {
       </div>
 
       {summary && (
-        <p className="rounded-md border-l-4 border-slate-300 bg-slate-50/50 px-3 py-2 text-sm leading-relaxed text-slate-700">
+        <p className="rounded-md border-l-4 border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-950/50 px-3 py-2 text-sm leading-relaxed text-slate-700 dark:text-slate-200">
           {summary}
         </p>
       )}
@@ -106,7 +106,7 @@ export function ParsedResumeView({ parsed }: { parsed: unknown }) {
       {/* Skills */}
       {skills.length > 0 && (
         <div>
-          <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
+          <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
             Skills ({skills.length})
           </h3>
           <div className="flex flex-wrap gap-1.5">
@@ -122,10 +122,10 @@ export function ParsedResumeView({ parsed }: { parsed: unknown }) {
       {/* Experience timeline */}
       {experience.length > 0 && (
         <div>
-          <h3 className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-500">
+          <h3 className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
             Experience ({experience.length})
           </h3>
-          <ol className="relative space-y-4 border-l-2 border-slate-200 pl-5">
+          <ol className="relative space-y-4 border-l-2 border-slate-200 dark:border-slate-800 pl-5">
             {experience.map((e, i) => {
               const start = asString(e.start);
               const end = asString(e.end) || "Present";
@@ -136,18 +136,18 @@ export function ParsedResumeView({ parsed }: { parsed: unknown }) {
                 <li key={i} className="relative">
                   <span className="absolute -left-[27px] top-1 h-3 w-3 rounded-full border-2 border-white bg-slate-400" />
                   <div className="flex flex-wrap items-baseline justify-between gap-2">
-                    <p className="text-sm font-semibold text-slate-900">
+                    <p className="text-sm font-semibold text-slate-900 dark:text-slate-50">
                       {asString(e.title) || "—"}{" "}
-                      <span className="font-normal text-slate-500">
+                      <span className="font-normal text-slate-500 dark:text-slate-400">
                         @ {asString(e.company) || "—"}
                       </span>
                     </p>
-                    <p className="font-mono text-xs text-slate-500">
+                    <p className="font-mono text-xs text-slate-500 dark:text-slate-400">
                       {start || "?"} – {end}
                     </p>
                   </div>
                   {bullets.length > 0 && (
-                    <ul className="mt-1.5 list-disc space-y-1 pl-5 text-sm text-slate-700">
+                    <ul className="mt-1.5 list-disc space-y-1 pl-5 text-sm text-slate-700 dark:text-slate-200">
                       {bullets.map((b, j) => (
                         <li key={j}>{b}</li>
                       ))}
@@ -163,24 +163,24 @@ export function ParsedResumeView({ parsed }: { parsed: unknown }) {
       {/* Education */}
       {education.length > 0 && (
         <div>
-          <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
+          <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
             Education ({education.length})
           </h3>
           <div className="grid gap-2 sm:grid-cols-2">
             {education.map((ed, i) => (
               <div
                 key={i}
-                className="rounded-md border border-slate-200 bg-white p-3 text-sm"
+                className="rounded-md border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-3 text-sm"
               >
-                <p className="font-medium text-slate-900">
+                <p className="font-medium text-slate-900 dark:text-slate-50">
                   {asString(ed.school) || "—"}
                 </p>
-                <p className="text-slate-600">
+                <p className="text-slate-600 dark:text-slate-300">
                   {asString(ed.degree)}
                   {ed.field ? ` · ${asString(ed.field)}` : ""}
                 </p>
                 {ed.year_end != null && (
-                  <p className="text-xs text-slate-500">{asNumber(ed.year_end)}</p>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">{asNumber(ed.year_end)}</p>
                 )}
               </div>
             ))}
@@ -191,7 +191,7 @@ export function ParsedResumeView({ parsed }: { parsed: unknown }) {
       {/* Links */}
       {links.length > 0 && (
         <div>
-          <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
+          <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
             Links
           </h3>
           <div className="flex flex-wrap gap-2 text-sm">
@@ -295,7 +295,7 @@ function LinkChip({ url }: { url: string }) {
       target="_blank"
       rel="noopener noreferrer"
       title={href}
-      className={`${cls} hover:bg-white`}
+      className={`${cls} hover:bg-white dark:hover:bg-slate-800`}
     >
       {inner}
     </a>
@@ -313,9 +313,9 @@ function Field({
 }) {
   return (
     <div>
-      <p className="text-[11px] uppercase tracking-wide text-slate-500">{label}</p>
+      <p className="text-[11px] uppercase tracking-wide text-slate-500 dark:text-slate-400">{label}</p>
       <p
-        className={`text-sm text-slate-900 ${mono ? "font-mono break-all" : ""}`}
+        className={`text-sm text-slate-900 dark:text-slate-50 ${mono ? "font-mono break-all" : ""}`}
       >
         {value}
       </p>
@@ -339,7 +339,7 @@ export function RedFlagsView({ payload }: { payload: unknown }) {
     inconsistencies.length === 0
   ) {
     return (
-      <p className="text-sm italic text-slate-500">No red flags detected.</p>
+      <p className="text-sm italic text-slate-500 dark:text-slate-400">No red flags detected.</p>
     );
   }
 
@@ -363,16 +363,16 @@ export function RedFlagsView({ payload }: { payload: unknown }) {
               return (
                 <li key={i} className="text-sm">
                   <div className="flex items-baseline justify-between gap-3">
-                    <span className="text-slate-700">
-                      <span className="font-mono text-slate-500">
+                    <span className="text-slate-700 dark:text-slate-200">
+                      <span className="font-mono text-slate-500 dark:text-slate-400">
                         {asString(g.before) || "?"}
                       </span>{" "}
                       →{" "}
-                      <span className="font-mono text-slate-500">
+                      <span className="font-mono text-slate-500 dark:text-slate-400">
                         {asString(g.after) || "?"}
                       </span>
                     </span>
-                    <span className="font-mono text-xs text-red-700">
+                    <span className="font-mono text-xs text-red-700 dark:text-red-300">
                       {months} mo
                     </span>
                   </div>
@@ -396,16 +396,16 @@ export function RedFlagsView({ payload }: { payload: unknown }) {
               return (
                 <li key={i} className="text-sm">
                   <div className="flex items-baseline justify-between gap-3">
-                    <span className="text-slate-700">
-                      <span className="font-mono text-slate-500">
+                    <span className="text-slate-700 dark:text-slate-200">
+                      <span className="font-mono text-slate-500 dark:text-slate-400">
                         {asString(o.a) || "?"}
                       </span>{" "}
                       ↔{" "}
-                      <span className="font-mono text-slate-500">
+                      <span className="font-mono text-slate-500 dark:text-slate-400">
                         {asString(o.b) || "?"}
                       </span>
                     </span>
-                    <span className="font-mono text-xs text-amber-700">
+                    <span className="font-mono text-xs text-amber-700 dark:text-amber-300">
                       {months} mo
                     </span>
                   </div>
@@ -423,7 +423,7 @@ export function RedFlagsView({ payload }: { payload: unknown }) {
           tone="amber"
           icon="!"
         >
-          <ul className="space-y-1.5 text-sm text-slate-700">
+          <ul className="space-y-1.5 text-sm text-slate-700 dark:text-slate-200">
             {inconsistencies.map((s, i) => (
               <li key={i} className="flex gap-2">
                 <span className="text-amber-600">•</span>
@@ -454,7 +454,7 @@ function FlagBlock({
       : "border-amber-200 bg-amber-50/40";
   return (
     <div className={`rounded-md border ${cls} p-3`}>
-      <h4 className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-slate-700">
+      <h4 className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-slate-700 dark:text-slate-200">
         <span>{icon}</span>
         {title}
       </h4>
@@ -471,7 +471,7 @@ export function InterviewQuestionsView({ payload }: { payload: unknown }) {
 
   if (questions.length === 0) {
     return (
-      <p className="text-sm italic text-slate-500">No questions generated.</p>
+      <p className="text-sm italic text-slate-500 dark:text-slate-400">No questions generated.</p>
     );
   }
 
@@ -486,20 +486,20 @@ export function InterviewQuestionsView({ payload }: { payload: unknown }) {
         return (
           <li
             key={i}
-            className="rounded-md border border-slate-200 bg-white p-3"
+            className="rounded-md border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-3"
           >
             <div className="flex items-start gap-3">
-              <span className="mt-0.5 inline-flex h-6 w-6 flex-none items-center justify-center rounded-full bg-slate-900 text-xs font-semibold text-white">
+              <span className="mt-0.5 inline-flex h-6 w-6 flex-none items-center justify-center rounded-full bg-slate-900 dark:bg-slate-100 dark:text-slate-900 text-xs font-semibold text-white">
                 {i + 1}
               </span>
               <div className="flex-1 space-y-2">
-                <p className="text-sm font-medium leading-snug text-slate-900">
+                <p className="text-sm font-medium leading-snug text-slate-900 dark:text-slate-50">
                   {text || "—"}
                 </p>
                 {skill && <Chip tone="indigo">{skill}</Chip>}
                 {probes.length > 0 && (
                   <details className="group">
-                    <summary className="cursor-pointer text-xs text-slate-500 hover:text-slate-700">
+                    <summary className="cursor-pointer text-xs text-slate-500 dark:text-slate-400 hover:text-slate-700">
                       <span className="group-open:hidden">
                         Show {probes.length} probe{probes.length === 1 ? "" : "s"}
                       </span>
@@ -507,7 +507,7 @@ export function InterviewQuestionsView({ payload }: { payload: unknown }) {
                         Hide probes
                       </span>
                     </summary>
-                    <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-slate-700">
+                    <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-slate-700 dark:text-slate-200">
                       {probes.map((pr, j) => (
                         <li key={j}>{pr}</li>
                       ))}
@@ -540,7 +540,7 @@ export function EnrichmentView({ payload }: { payload: unknown }) {
   const error = asString(p.error);
   if (error) {
     return (
-      <p className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-800">
+      <p className="rounded-md border border-red-200 dark:border-red-900 bg-red-50 dark:bg-red-950/40 p-3 text-sm text-red-800 dark:text-red-200">
         Enrichment error: {error}
       </p>
     );
@@ -563,7 +563,7 @@ export function EnrichmentView({ payload }: { payload: unknown }) {
 
       {langs.length > 0 && (
         <div>
-          <p className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-slate-500">
+          <p className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
             Top languages
           </p>
           <div className="flex flex-wrap gap-1.5">
@@ -581,12 +581,12 @@ export function EnrichmentView({ payload }: { payload: unknown }) {
 
       {notable.length > 0 && (
         <div>
-          <p className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-slate-500">
+          <p className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
             Notable repos ({notable.length})
           </p>
-          <div className="overflow-x-auto rounded-md border border-slate-200">
+          <div className="overflow-x-auto rounded-md border border-slate-200 dark:border-slate-800">
             <table className="min-w-full divide-y divide-slate-200 text-sm">
-              <thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
+              <thead className="bg-slate-50 dark:bg-slate-950 text-left text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">
                 <tr>
                   <th className="px-3 py-2 font-semibold">Repo</th>
                   <th className="px-3 py-2 font-semibold">Language</th>
@@ -594,7 +594,7 @@ export function EnrichmentView({ payload }: { payload: unknown }) {
                   <th className="px-3 py-2 text-right font-semibold">Forks</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100 bg-white">
+              <tbody className="divide-y divide-slate-100 bg-white dark:bg-slate-900">
                 {notable.map((r, i) => {
                   const name = asString(r.name) || asString(r.full_name) || "—";
                   const url = asString(r.url) || asString(r.html_url);
@@ -603,7 +603,7 @@ export function EnrichmentView({ payload }: { payload: unknown }) {
                   const forks = asNumber(r.forks ?? r.forks_count);
                   return (
                     <tr key={`${name}-${i}`}>
-                      <td className="px-3 py-2 font-mono text-xs text-slate-900">
+                      <td className="px-3 py-2 font-mono text-xs text-slate-900 dark:text-slate-50">
                         {url ? (
                           <a
                             href={url}
@@ -617,13 +617,13 @@ export function EnrichmentView({ payload }: { payload: unknown }) {
                           name
                         )}
                       </td>
-                      <td className="px-3 py-2 text-slate-700">
+                      <td className="px-3 py-2 text-slate-700 dark:text-slate-200">
                         {lang ? <Chip tone="slate">{lang}</Chip> : "—"}
                       </td>
-                      <td className="px-3 py-2 text-right font-mono text-xs tabular-nums text-slate-700">
+                      <td className="px-3 py-2 text-right font-mono text-xs tabular-nums text-slate-700 dark:text-slate-200">
                         ★ {stars}
                       </td>
-                      <td className="px-3 py-2 text-right font-mono text-xs tabular-nums text-slate-700">
+                      <td className="px-3 py-2 text-right font-mono text-xs tabular-nums text-slate-700 dark:text-slate-200">
                         ⑂ {forks}
                       </td>
                     </tr>
@@ -640,11 +640,11 @@ export function EnrichmentView({ payload }: { payload: unknown }) {
 
 function Stat({ label, value }: { label: string; value: number }) {
   return (
-    <div className="rounded-md border border-slate-200 bg-white px-3 py-2">
-      <p className="text-[11px] uppercase tracking-wide text-slate-500">
+    <div className="rounded-md border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-3 py-2">
+      <p className="text-[11px] uppercase tracking-wide text-slate-500 dark:text-slate-400">
         {label}
       </p>
-      <p className="text-2xl font-semibold tabular-nums text-slate-900">
+      <p className="text-2xl font-semibold tabular-nums text-slate-900 dark:text-slate-50">
         {value.toLocaleString()}
       </p>
     </div>

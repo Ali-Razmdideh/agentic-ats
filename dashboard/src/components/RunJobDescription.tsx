@@ -87,29 +87,29 @@ export default function RunJobDescription({
     responsibilities.length === 0;
 
   return (
-    <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+    <section className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 shadow-sm">
       <div className="mb-4 flex flex-wrap items-baseline justify-between gap-3">
         <div>
-          <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">
+          <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
             Job description
           </h2>
-          <p className="mt-0.5 font-mono text-xs text-slate-500">{jdPath}</p>
+          <p className="mt-0.5 font-mono text-xs text-slate-500 dark:text-slate-400">{jdPath}</p>
         </div>
         {jdBlobKey && <JdDownloadLink blobKey={jdBlobKey} />}
       </div>
 
       {!hasParse ? (
-        <p className="rounded-md border border-dashed border-slate-300 bg-slate-50 p-4 text-sm italic text-slate-500">
+        <p className="rounded-md border border-dashed border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 p-4 text-sm italic text-slate-500 dark:text-slate-400">
           JD analysis pending — the jd_analyzer agent hasn't completed yet.
         </p>
       ) : (
         <div className="space-y-5">
           {parseLooksEmpty && (
-            <div className="rounded-md border border-amber-300 bg-amber-50 p-3 text-sm">
-              <p className="font-semibold text-amber-900">
+            <div className="rounded-md border border-amber-300 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/40 p-3 text-sm">
+              <p className="font-semibold text-amber-900 dark:text-amber-100">
                 JD analysis returned no requirements
               </p>
-              <p className="mt-1 text-amber-800">
+              <p className="mt-1 text-amber-800 dark:text-amber-200">
                 The jd_analyzer agent ran but produced an empty parse — no
                 role family, must-haves, nice-to-haves, or responsibilities.
                 Common causes: the model returned malformed JSON, the JD
@@ -122,7 +122,7 @@ export default function RunJobDescription({
           )}
           {/* Headline: role + seniority + min years */}
           <div className="flex flex-wrap items-center gap-2">
-            <h3 className="text-xl font-semibold text-slate-900">{role}</h3>
+            <h3 className="text-xl font-semibold text-slate-900 dark:text-slate-50">{role}</h3>
             <Chip tone="indigo">{seniority}</Chip>
             {minYears != null && (
               <Chip tone="slate">{minYears}+ yrs experience</Chip>
@@ -138,7 +138,7 @@ export default function RunJobDescription({
               icon="●"
             >
               {mustHave.length === 0 ? (
-                <p className="text-sm italic text-slate-500">
+                <p className="text-sm italic text-slate-500 dark:text-slate-400">
                   No must-haves identified.
                 </p>
               ) : (
@@ -160,7 +160,7 @@ export default function RunJobDescription({
               icon="○"
             >
               {niceToHave.length === 0 ? (
-                <p className="text-sm italic text-slate-500">
+                <p className="text-sm italic text-slate-500 dark:text-slate-400">
                   None listed.
                 </p>
               ) : (
@@ -183,7 +183,7 @@ export default function RunJobDescription({
               tone="emerald"
               icon="→"
             >
-              <ul className="space-y-1.5 text-sm text-slate-800">
+              <ul className="space-y-1.5 text-sm text-slate-800 dark:text-slate-100">
                 {responsibilities.map((r, i) => (
                   <li key={i} className="flex gap-2">
                     <span className="mt-1 h-1.5 w-1.5 flex-none rounded-full bg-emerald-500" />
@@ -226,7 +226,7 @@ function Block({
         <span>{icon}</span>
         {title}
         {count > 0 && (
-          <span className="rounded-full bg-slate-100 px-1.5 font-mono text-[10px] text-slate-600">
+          <span className="rounded-full bg-slate-100 dark:bg-slate-800 px-1.5 font-mono text-[10px] text-slate-600 dark:text-slate-300">
             {count}
           </span>
         )}

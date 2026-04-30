@@ -234,19 +234,19 @@ function ScoreGauge({ score }: { score: number }) {
   return (
     <div className="flex flex-col items-center justify-center gap-2">
       <div className="relative">
-        <span className="text-5xl font-semibold tabular-nums text-slate-900">
+        <span className="text-5xl font-semibold tabular-nums text-slate-900 dark:text-slate-50">
           {score.toFixed(2)}
         </span>
-        <span className="ml-1 text-sm text-slate-500">/ 1.00</span>
+        <span className="ml-1 text-sm text-slate-500 dark:text-slate-400">/ 1.00</span>
       </div>
       <div className="w-40">
-        <div className="h-2 overflow-hidden rounded-full bg-slate-100">
+        <div className="h-2 overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800">
           <div
             className={`h-full rounded-full ${fillCss}`}
             style={{ width: `${pct * 100}%` }}
           />
         </div>
-        <div className="mt-1 flex justify-between text-[10px] uppercase tracking-wide text-slate-400">
+        <div className="mt-1 flex justify-between text-[10px] uppercase tracking-wide text-slate-400 dark:text-slate-500">
           <span>0</span>
           <span>0.4</span>
           <span>0.7</span>
@@ -274,23 +274,23 @@ export default function CandidateSummary({
     >
       <div className="grid grid-cols-1 gap-6 md:grid-cols-[auto_1fr]">
         {/* Left: score + verdict */}
-        <div className="flex flex-col items-center justify-center gap-3 border-b border-slate-200 pb-4 md:border-b-0 md:border-r md:pb-0 md:pr-6">
+        <div className="flex flex-col items-center justify-center gap-3 border-b border-slate-200 dark:border-slate-800 pb-4 md:border-b-0 md:border-r md:pb-0 md:pr-6">
           {score ? (
             <ScoreGauge score={score.score} />
           ) : (
-            <p className="text-sm italic text-slate-500">Not scored yet</p>
+            <p className="text-sm italic text-slate-500 dark:text-slate-400">Not scored yet</p>
           )}
           <div
-            className={`inline-flex items-center rounded-full bg-white px-3 py-1 text-sm font-semibold ring-2 ring-inset ${tone.ring} ${tone.text}`}
+            className={`inline-flex items-center rounded-full bg-white dark:bg-slate-900 px-3 py-1 text-sm font-semibold ring-2 ring-inset ${tone.ring} ${tone.text}`}
           >
             {verdict.label}
             {verdict.reviewer && (
-              <span className="ml-1.5 text-[10px] uppercase tracking-wide text-slate-400">
+              <span className="ml-1.5 text-[10px] uppercase tracking-wide text-slate-400 dark:text-slate-500">
                 reviewer
               </span>
             )}
           </div>
-          <p className="max-w-xs text-center text-xs text-slate-600">
+          <p className="max-w-xs text-center text-xs text-slate-600 dark:text-slate-300">
             {verdict.description}
           </p>
         </div>
@@ -315,8 +315,8 @@ export default function CandidateSummary({
       </div>
 
       {score?.rationale && (
-        <div className="mt-5 rounded-md border border-slate-200 bg-white px-3 py-2 text-sm leading-relaxed text-slate-700">
-          <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+        <div className="mt-5 rounded-md border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-3 py-2 text-sm leading-relaxed text-slate-700 dark:text-slate-200">
+          <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
             Match rationale
           </p>
           {score.rationale}
@@ -345,7 +345,7 @@ function Column({
       : "bg-red-100 text-red-700";
   return (
     <div>
-      <h3 className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-slate-700">
+      <h3 className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-slate-700 dark:text-slate-200">
         <span
           className={`inline-flex h-5 w-5 items-center justify-center rounded-full ${iconCss}`}
         >
@@ -354,9 +354,9 @@ function Column({
         {title} ({items.length})
       </h3>
       {items.length === 0 ? (
-        <p className="text-xs italic text-slate-500">{emptyText}</p>
+        <p className="text-xs italic text-slate-500 dark:text-slate-400">{emptyText}</p>
       ) : (
-        <ul className="space-y-1.5 text-sm text-slate-800">
+        <ul className="space-y-1.5 text-sm text-slate-800 dark:text-slate-100">
           {items.map((b, i) => (
             <li key={i} className="flex gap-2">
               <span
@@ -365,7 +365,7 @@ function Column({
               <span className="flex-1">
                 {b.text}
                 {b.detail && (
-                  <span className="block text-xs text-slate-500">
+                  <span className="block text-xs text-slate-500 dark:text-slate-400">
                     {b.detail}
                   </span>
                 )}

@@ -8,9 +8,9 @@ export default async function OrgsPage() {
   return (
     <div className="space-y-6">
       <h1 className="text-2xl font-semibold">Your orgs</h1>
-      <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
+      <div className="overflow-hidden rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
         <table className="min-w-full divide-y divide-slate-200 text-sm">
-          <thead className="bg-slate-50 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">
+          <thead className="bg-slate-50 dark:bg-slate-950 text-left text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
             <tr>
               <th className="px-4 py-2">Name</th>
               <th className="px-4 py-2">Slug</th>
@@ -21,14 +21,14 @@ export default async function OrgsPage() {
             {memberships.map((m) => (
               <tr key={m.org.slug}>
                 <td className="px-4 py-2 font-medium">{m.org.name}</td>
-                <td className="px-4 py-2 text-slate-500">{m.org.slug}</td>
-                <td className="px-4 py-2 text-slate-700">{m.role}</td>
+                <td className="px-4 py-2 text-slate-500 dark:text-slate-400">{m.org.slug}</td>
+                <td className="px-4 py-2 text-slate-700 dark:text-slate-200">{m.role}</td>
               </tr>
             ))}
           </tbody>
         </table>
       </div>
-      <p className="text-xs text-slate-500">
+      <p className="text-xs text-slate-500 dark:text-slate-400">
         Multi-org invitations land in a future sub-project. For now, signing up
         with an email at an existing org&apos;s domain auto-joins that org as a
         reviewer.

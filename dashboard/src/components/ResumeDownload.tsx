@@ -23,7 +23,7 @@ export default function ResumeDownload({ blobKey }: { blobKey: string }) {
           setLoading(false);
         }
       }}
-      className="rounded-md border border-slate-300 px-3 py-1.5 text-sm hover:bg-slate-50 disabled:opacity-50"
+      className="rounded-md border border-slate-300 dark:border-slate-700 px-3 py-1.5 text-sm hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-50"
     >
       {loading ? "Generating…" : "Download resume"}
     </button>

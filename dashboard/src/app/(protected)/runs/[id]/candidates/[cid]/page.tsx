@@ -61,7 +61,7 @@ export default async function CandidateDetailPage({
       <div>
         <Link
           href={`/runs/${runId}`}
-          className="text-sm text-slate-500 hover:text-slate-900"
+          className="text-sm text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-50"
         >
           ← Back to run #{runId}
         </Link>
@@ -70,7 +70,7 @@ export default async function CandidateDetailPage({
             <h1 className="text-2xl font-semibold">
               {candidate.name || `Candidate #${candidate.id}`}
             </h1>
-            <p className="text-sm text-slate-500">
+            <p className="text-sm text-slate-500 dark:text-slate-400">
               {candidate.email || "—"} · {candidate.phone || "—"}
             </p>
           </div>
@@ -136,8 +136,8 @@ function Section({
   children: React.ReactNode;
 }) {
   return (
-    <section className="rounded-xl border border-slate-200 bg-white p-4">
-      <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-slate-500">
+    <section className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4">
+      <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
         {title}
       </h2>
       {children}

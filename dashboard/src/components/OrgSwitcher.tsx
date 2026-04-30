@@ -16,7 +16,7 @@ export default function OrgSwitcher({
         name="slug"
         defaultValue={active}
         onChange={() => formRef.current?.submit()}
-        className="rounded-md border border-slate-300 px-2 py-1 text-sm"
+        className="rounded-md border border-slate-300 dark:border-slate-700 px-2 py-1 text-sm"
       >
         {options.map((o) => (
           <option key={o.slug} value={o.slug}>
