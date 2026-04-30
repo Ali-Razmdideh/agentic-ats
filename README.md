@@ -401,13 +401,17 @@ Shipped:
 Deferred:
 - ⏳ Password reset by email, email verification, multi-org invitations.
 - ⏳ LinkedIn enricher (today the enricher is GitHub-only).
-- ✅ **Real-time updates (SSE)** — the run-detail page now opens a single
-  `EventSource` against `/api/runs/:id/stream` instead of polling. Server
-  diffs the run's (status, scored count, audit count) every 1s and pushes
-  an `update` event only on change; emits `done` and closes when the run
-  reaches a terminal status. 15s heartbeat keepalives so corporate
-  proxies don't drop the idle TCP. WebSockets / Postgres LISTEN-NOTIFY
-  remain a future optimisation.
+- ✅ **Real-time updates (SSE + Postgres LISTEN/NOTIFY)** — the run-detail
+  page opens a single `EventSource` against `/api/runs/:id/stream`.
+  Triggers on `runs` / `audits` / `scores` / `shortlists` emit
+  `NOTIFY 'run_progress', '<run_id>'` after every relevant mutation; a
+  Node-side singleton `pg.Client` stays subscribed and fans notifications
+  out to every open SSE handler via an `EventEmitter`. So 100 open tabs
+  share one PG connection, and updates land within a few ms of the
+  worker writing — no client-side polling, no per-tab Postgres
+  connection. A 5s server-side snapshot poll is kept as a safety net for
+  any notification dropped during a reconnect window. 15s heartbeat
+  comments keep the connection alive through corporate proxies.
 
 ---
 

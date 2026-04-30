@@ -1,29 +1,26 @@
-// Server-sent events for live run progress. Replaces the 2.5s
-// polling RunStatusPoller did against /api/runs/:id/status.
+// Server-sent events for live run progress. Replaces the earlier
+// 2.5s client polling: one persistent connection per browser tab,
+// driven by Postgres LISTEN/NOTIFY (see lib/run-events.ts) plus a
+// 5s safety poll for missed notifications.
 //
-// The handler keeps a single connection open per browser tab, polls
-// Postgres every POLL_MS, and pushes an `update` event when any of
-// (status, scored_count, audit_event_count) changes. When the run
-// reaches a terminal status it emits one final `done` event and
-// closes the stream so the client can stop reconnecting.
+// Event protocol:
+//   event: hello   data: { runId }                    once on connect
+//   event: update  data: { status, scored, events,    on every change
+//                          finished_at }
+//   event: done    data: { status?, reason? }         terminal status
 //
-// Why server-side polling rather than LISTEN/NOTIFY: the worker
-// already writes audit rows + scores rows to Postgres, so we just
-// detect changes by comparing snapshots. LISTEN/NOTIFY would push
-// near-instant updates but needs a dedicated long-lived connection
-// per listener and orchestrator-side NOTIFY emits — bigger surface
-// area for a marginal latency win at this scale. Keep that as a
-// follow-up if the page ever feels laggy.
+// Diff is computed server-side so a quiet run produces no events.
 
 import { requireUserAndOrg } from "@/lib/auth";
 import { pool } from "@/lib/db";
+import { subscribeToRun } from "@/lib/run-events";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const POLL_MS = 1000;
-const HEARTBEAT_MS = 15_000; // empty `: ping` keepalives so proxies don't time out
-const MAX_DURATION_MS = 30 * 60 * 1000; // hard cap, even for stuck runs
+const SAFETY_POLL_MS = 5000;
+const HEARTBEAT_MS = 15_000;
+const MAX_DURATION_MS = 30 * 60 * 1000;
 const TERMINAL = new Set([
   "ok",
   "completed",
@@ -41,7 +38,7 @@ interface Snapshot {
 }
 
 async function snapshot(orgId: number, runId: number): Promise<Snapshot | null> {
-  const r = await pool.query<Snapshot & { exists: boolean }>(
+  const r = await pool.query<Snapshot>(
     `SELECT
         runs.status,
         runs.finished_at,
@@ -76,20 +73,47 @@ export async function GET(
 
   const stream = new ReadableStream<Uint8Array>({
     async start(controller) {
-      let lastKey = "";
       let closed = false;
+      let lastKey = "";
+      let lastSentAt = Date.now();
+      let unsubscribe: () => void = () => {};
 
-      const onAbort = () => {
+      // Coordinates wakeups from either the NOTIFY bus, the safety
+      // poll, or the heartbeat timer.
+      let wake: () => void = () => {};
+      function nextWake(timeoutMs: number): Promise<"event" | "timeout" | "abort"> {
+        return new Promise((resolve) => {
+          const t = setTimeout(() => {
+            wake = () => {};
+            resolve("timeout");
+          }, timeoutMs);
+          wake = () => {
+            clearTimeout(t);
+            wake = () => {};
+            resolve("event");
+          };
+          req.signal.addEventListener(
+            "abort",
+            () => {
+              clearTimeout(t);
+              resolve("abort");
+            },
+            { once: true },
+          );
+        });
+      }
+
+      function teardown(): void {
         if (closed) return;
         closed = true;
+        unsubscribe();
         try {
           controller.close();
         } catch {
           /* already closed */
         }
-      };
-      // Close the loop when the browser disconnects.
-      req.signal.addEventListener("abort", onAbort);
+      }
+      req.signal.addEventListener("abort", teardown);
 
       function safeEnqueue(s: string): boolean {
         if (closed) return false;
@@ -102,48 +126,66 @@ export async function GET(
         }
       }
 
-      // Initial event so the client knows we're alive immediately.
-      safeEnqueue(sseFrame("hello", { runId }));
-
-      let lastHeartbeatAt = Date.now();
-      while (!closed) {
-        if (Date.now() - startedAt > MAX_DURATION_MS) {
-          safeEnqueue(sseFrame("done", { reason: "max_duration" }));
-          break;
-        }
+      async function emitIfChanged(): Promise<{ done: boolean }> {
         let snap: Snapshot | null;
         try {
           snap = await snapshot(org.id, runId);
         } catch (err) {
           // eslint-disable-next-line no-console
-          console.error("sse snapshot failed", err);
-          await new Promise((r) => setTimeout(r, POLL_MS));
-          continue;
+          console.error("[sse] snapshot failed", err);
+          return { done: false };
         }
         if (!snap) {
-          // Run was deleted or doesn't belong to org.
           safeEnqueue(sseFrame("done", { reason: "not_found" }));
-          break;
+          return { done: true };
         }
         const key = `${snap.status}|${snap.scored}|${snap.events}|${
           snap.finished_at ?? ""
         }`;
         if (key !== lastKey) {
           lastKey = key;
-          if (!safeEnqueue(sseFrame("update", snap))) break;
-        } else if (Date.now() - lastHeartbeatAt > HEARTBEAT_MS) {
-          // Empty comment line keeps the connection alive through
-          // proxies that drop idle TCP after ~30-60s.
-          if (!safeEnqueue(": ping\n\n")) break;
-          lastHeartbeatAt = Date.now();
+          if (!safeEnqueue(sseFrame("update", snap))) return { done: true };
+          lastSentAt = Date.now();
         }
         if (TERMINAL.has(snap.status)) {
           safeEnqueue(sseFrame("done", { status: snap.status }));
+          return { done: true };
+        }
+        return { done: false };
+      }
+
+      // Subscribe to NOTIFY before sending hello so we don't miss
+      // events that fire during the first snapshot.
+      unsubscribe = await subscribeToRun(runId, () => wake());
+
+      safeEnqueue(sseFrame("hello", { runId }));
+
+      // Initial snapshot.
+      if ((await emitIfChanged()).done) {
+        teardown();
+        return;
+      }
+
+      while (!closed) {
+        if (Date.now() - startedAt > MAX_DURATION_MS) {
+          safeEnqueue(sseFrame("done", { reason: "max_duration" }));
           break;
         }
-        await new Promise((r) => setTimeout(r, POLL_MS));
+        const idle = Date.now() - lastSentAt;
+        const heartbeatIn = Math.max(0, HEARTBEAT_MS - idle);
+        const wait = Math.min(SAFETY_POLL_MS, heartbeatIn || HEARTBEAT_MS);
+        const reason = await nextWake(wait);
+        if (reason === "abort") break;
+        if (reason === "timeout" && Date.now() - lastSentAt >= HEARTBEAT_MS) {
+          // Empty SSE comment line keeps the connection alive through
+          // proxies that drop idle TCP after ~30-60s.
+          if (!safeEnqueue(": ping\n\n")) break;
+          lastSentAt = Date.now();
+        }
+        const result = await emitIfChanged();
+        if (result.done) break;
       }
-      onAbort();
+      teardown();
     },
   });
 
@@ -153,7 +195,6 @@ export async function GET(
       "Content-Type": "text/event-stream; charset=utf-8",
       "Cache-Control": "no-cache, no-transform",
       Connection: "keep-alive",
-      // Disable nginx-style buffering when proxied.
       "X-Accel-Buffering": "no",
     },
   });

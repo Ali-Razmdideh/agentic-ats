@@ -70,6 +70,42 @@ async def _init_async(settings: Settings) -> None:
                 "ADD COLUMN IF NOT EXISTS prev_hash BYTEA, "
                 "ADD COLUMN IF NOT EXISTS hash BYTEA"
             )
+            # NOTIFY-triggers feeding the dashboard's SSE LISTEN client.
+            # Every mutation that affects what /runs/<id> renders fires
+            # `NOTIFY run_progress, '<run_id>'`. Idempotent: the function
+            # is created OR REPLACE'd, and triggers are dropped+recreated.
+            await conn.exec_driver_sql(
+                """
+                CREATE OR REPLACE FUNCTION notify_run_progress()
+                RETURNS trigger
+                LANGUAGE plpgsql AS $$
+                DECLARE
+                    rid bigint;
+                BEGIN
+                    IF TG_TABLE_NAME = 'runs' THEN
+                        rid := NEW.id;
+                    ELSE
+                        rid := NEW.run_id;
+                    END IF;
+                    PERFORM pg_notify('run_progress', rid::text);
+                    RETURN NEW;
+                END;
+                $$;
+                """
+            )
+            for table, when in [
+                ("audits", "AFTER INSERT"),
+                ("scores", "AFTER INSERT OR UPDATE"),
+                ("shortlists", "AFTER INSERT OR UPDATE"),
+                ("runs", "AFTER UPDATE"),
+            ]:
+                await conn.exec_driver_sql(
+                    f"DROP TRIGGER IF EXISTS {table}_notify ON {table};"
+                )
+                await conn.exec_driver_sql(
+                    f"CREATE TRIGGER {table}_notify {when} ON {table} "
+                    f"FOR EACH ROW EXECUTE FUNCTION notify_run_progress();"
+                )
         async with sm() as session:
             existing = await session.execute(
                 select(Org).where(Org.slug == settings.default_org_slug)
