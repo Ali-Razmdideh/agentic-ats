@@ -142,18 +142,30 @@ export async function listAuditEventsForRun(
 
 // ----- Decisions ----------------------------------------------------------
 
-/** Throws if (run_id, candidate_id) doesn't belong to org_id. Tenant guard. */
+/** Throws CROSS_TENANT if the (run_id, candidate_id) pair isn't valid for
+ *  org_id. "Valid" = the candidate was actually screened in this run AND
+ *  both rows belong to the org.
+ *
+ *  The org-membership check alone is not enough: a reviewer in Org A could
+ *  otherwise post a comment on Run #X about Candidate #Y where Y was never
+ *  screened in X (just happens to live in the same org). The composite FKs
+ *  on `decisions` / `candidate_comments` only enforce per-org membership of
+ *  each side independently, not that the pair appears together in a run.
+ *
+ *  We use `scores` as the source of truth for "candidate participated in
+ *  run": the orchestrator writes one scores row per candidate per run after
+ *  the matcher step, so any candidate the reviewer can legitimately act on
+ *  has a row there. */
 async function assertRunAndCandidateInOrg(
   orgId: number,
   runId: number,
   candidateId: number,
 ): Promise<void> {
   const r = await pool.query<{ ok: boolean }>(
-    `SELECT
-       EXISTS (SELECT 1 FROM runs WHERE id = $2 AND org_id = $1)
-       AND
-       EXISTS (SELECT 1 FROM candidates WHERE id = $3 AND org_id = $1)
-       AS ok`,
+    `SELECT EXISTS (
+        SELECT 1 FROM scores
+         WHERE org_id = $1 AND run_id = $2 AND candidate_id = $3
+     ) AS ok`,
     [orgId, runId, candidateId],
   );
   if (!r.rows[0]?.ok) {

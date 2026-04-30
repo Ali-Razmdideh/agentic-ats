@@ -248,10 +248,16 @@ async def verify_chain(
             )
         else:
             created_iso = str(created_at)
+        # Some drivers return the Postgres ENUM as the underlying
+        # string ("user"); others (or ORM-loaded rows) return the
+        # ActorKind member, whose default str() is "ActorKind.user".
+        # Force it to the .value form to match what the writer hashed.
+        ak = r["actor_kind"]
+        ak_str = ak.value if hasattr(ak, "value") else str(ak)
         view = record_view(
             org_id=r["org_id"],
             actor_user_id=r["actor_user_id"],
-            actor_kind=str(r["actor_kind"]),
+            actor_kind=ak_str,
             kind=r["kind"],
             target_kind=r["target_kind"],
             target_id=r["target_id"],

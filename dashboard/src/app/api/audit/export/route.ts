@@ -68,7 +68,12 @@ export async function GET(req: Request) {
     },
   });
 
-  const filename = `audit-log-${org.slug}-${new Date()
+  // Sanitize org.slug for use in Content-Disposition. The slug is derived
+  // from the email domain at signup; if the domain contained a quote /
+  // backslash / control char it could break the header structure or
+  // confuse downstream CSV consumers. Restrict to a known-safe subset.
+  const safeSlug = org.slug.replace(/[^A-Za-z0-9._-]/g, "-").slice(0, 64);
+  const filename = `audit-log-${safeSlug}-${new Date()
     .toISOString()
     .slice(0, 10)}.csv`;
   return new Response(stream, {
