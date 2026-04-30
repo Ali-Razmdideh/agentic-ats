@@ -1,5 +1,12 @@
 // Single shared `pg` Pool. Module-level singleton survives Next.js HMR.
-import { Pool, type PoolClient } from "pg";
+import { Pool, types, type PoolClient } from "pg";
+
+// Parse BIGINT (OID 20) as JS number. Default behaviour returns strings to
+// avoid precision loss above 2^53−1; safe to override for our row counts
+// (run/candidate/comment IDs will never exceed 9e15). Without this, code
+// like `score.candidate_id === Number(cid)` silently fails because the
+// LHS is a string and the RHS is a number.
+types.setTypeParser(20, (v) => (v == null ? null : Number(v)));
 
 const globalForPool = globalThis as unknown as { __atsPgPool?: Pool };
 
