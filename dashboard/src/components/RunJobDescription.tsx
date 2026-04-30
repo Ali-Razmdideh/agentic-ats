@@ -74,6 +74,18 @@ export default function RunJobDescription({
     .map((s) => asString(s))
     .filter(Boolean);
 
+  // Detect a degenerate parse: the LLM returned valid JSON but every
+  // load-bearing field is empty. Schema coercion fills defaults
+  // silently, which would otherwise read as a "parsed" JD with no
+  // requirements. Surface it instead so reviewers don't trust empty
+  // matcher output.
+  const parseLooksEmpty =
+    hasParse &&
+    !asString(p.role_family) &&
+    mustHave.length === 0 &&
+    niceToHave.length === 0 &&
+    responsibilities.length === 0;
+
   return (
     <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
       <div className="mb-4 flex flex-wrap items-baseline justify-between gap-3">
@@ -92,6 +104,22 @@ export default function RunJobDescription({
         </p>
       ) : (
         <div className="space-y-5">
+          {parseLooksEmpty && (
+            <div className="rounded-md border border-amber-300 bg-amber-50 p-3 text-sm">
+              <p className="font-semibold text-amber-900">
+                JD analysis returned no requirements
+              </p>
+              <p className="mt-1 text-amber-800">
+                The jd_analyzer agent ran but produced an empty parse — no
+                role family, must-haves, nice-to-haves, or responsibilities.
+                Common causes: the model returned malformed JSON, the JD
+                file was unreadable, or a transient API failure (the
+                retries didn't recover). Downstream candidate scores will
+                be unreliable for this run; consider re-uploading and
+                running again.
+              </p>
+            </div>
+          )}
           {/* Headline: role + seniority + min years */}
           <div className="flex flex-wrap items-center gap-2">
             <h3 className="text-xl font-semibold text-slate-900">{role}</h3>

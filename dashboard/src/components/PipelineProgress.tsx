@@ -38,6 +38,7 @@ function buildStages(p: Omit<Props, "events">): Stage[] {
   const redFlagsCount = countByPrefix(p.audits, "red_flags:");
   const interviewQsCount = countByPrefix(p.audits, "interview_qs:");
   const enricherCount = countByPrefix(p.audits, "enricher:");
+  const dedupPresent = hasKind(p.audits, "dedup");
   const isFinished =
     p.status === "ok" ||
     p.status === "completed" ||
@@ -57,6 +58,27 @@ function buildStages(p: Omit<Props, "events">): Stage[] {
     return isFinished ? "skipped" : "pending";
   }
 
+  // Resume parsing isn't audited per-resume — we only know it finished
+  // once *something* downstream ran. If dedup ran, all parsers ran (dedup
+  // sees every parsed_resume). If a score landed, that resume was parsed.
+  // For mid-flight runs without those signals, show "in progress" so it
+  // doesn't read as 0/4 when parsers are clearly busy.
+  let parseState: StageState;
+  let parseDetail: string;
+  if (dedupPresent || scoredCount >= total) {
+    parseState = "done";
+    parseDetail = `${total} / ${total}`;
+  } else if (scoredCount > 0) {
+    parseState = "in_progress";
+    parseDetail = `${scoredCount} / ${total}`;
+  } else if (isFinished) {
+    parseState = "skipped";
+    parseDetail = `0 / ${total}`;
+  } else {
+    parseState = "in_progress";
+    parseDetail = `… / ${total}`;
+  }
+
   const stages: Stage[] = [
     {
       id: "jd",
@@ -66,13 +88,13 @@ function buildStages(p: Omit<Props, "events">): Stage[] {
     {
       id: "parse",
       label: "Resume parsing",
-      state: stageOf(scoredCount, total),
-      detail: `${Math.min(scoredCount, total)} / ${total}`,
+      state: parseState,
+      detail: parseDetail,
     },
     {
       id: "dedup",
       label: "Deduplication",
-      state: flag(hasKind(p.audits, "dedup")),
+      state: flag(dedupPresent),
     },
     {
       id: "score",
