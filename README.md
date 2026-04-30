@@ -5,10 +5,21 @@
 [![Python](https://img.shields.io/pypi/pyversions/ats-screen.svg)](https://pypi.org/project/ats-screen/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-A multi-agent CLI for screening resumes against a job description. Built on the
-[Claude Agent SDK](https://docs.claude.com/en/api/agent-sdk/python). Runs against
-the native Anthropic API or any compatible endpoint (OpenRouter is the tested
-alternative).
+A multi-agent system for screening resumes against a job description, with a
+**reviewer dashboard** for hiring managers. Built on the
+[Claude Agent SDK](https://docs.claude.com/en/api/agent-sdk/python). Runs
+against the native Anthropic API or any compatible endpoint (OpenRouter is the
+tested alternative).
+
+**Three runtimes, one Postgres + MinIO:**
+
+- `ats screen` — original CLI, drops resumes through 13 cooperating subagents.
+- `ats worker` — background daemon that pulls queued runs from Postgres
+  (`FOR UPDATE SKIP LOCKED`) and processes them with the same orchestrator.
+- `dashboard/` — Next.js 15 (App Router, TypeScript) reviewer UI: signup /
+  login, JD + resumes upload, live pipeline progress, score gauge with
+  pros/cons distillation, rich agent-output visualizations, and shortlist /
+  hold / reject decisions with comment threads.
 
 13 cooperating subagents — parser, jd_analyzer, matcher, ranker, verifier,
 bias_auditor, deduper, taxonomy, summarizer, red_flags, interview_qs, outreach,
@@ -16,9 +27,9 @@ enricher — orchestrated through one `ClaudeSDKClient` with bounded concurrency
 structured logging, retry-with-backoff, schema validation on every output, and
 per-run USD cost accounting.
 
-Persists to **Postgres** (results, audits, candidates, runs, orgs / users /
-memberships) and **MinIO** (resume + JD blobs) behind an org-scoped
-repository layer — multi-tenant from day one.
+Persists to **Postgres** (results, audits, decisions, comments, sessions,
+orgs / users / memberships) and **MinIO** (resume + JD blobs) behind an
+org-scoped repository layer — multi-tenant from day one.
 
 ---
 
@@ -96,6 +107,8 @@ ATS_MODEL_FAST=anthropic/claude-haiku-4.5
 | `ATS_AGENT_MAX_RETRIES` | `2` | Retries on transient errors |
 | `ATS_CONCURRENCY` | `4` | Max parallel subagent calls |
 | `ATS_MAX_COST_USD` | `0` | Hard cap (`0` = no cap) |
+| `ATS_WORKER_POLL_S` | `3` | Worker queue poll interval |
+| `WORKER_HTTP_PROXY` | _(unset)_ | Optional HTTP/HTTPS proxy for the worker container — set when the host's outbound traffic must go through one (e.g. `http://host.docker.internal:11180`). Blank in any environment with direct egress. |
 
 ---
 
@@ -126,19 +139,100 @@ ats outreach --run 1 --decision shortlist [--org acme]
 
 ### Dashboard
 
-A Next.js reviewer dashboard lives in [`dashboard/`](dashboard/) — multi-tenant signup / login, JD + resume uploads that queue runs for the worker, and a per-candidate UI for shortlist / hold / reject decisions plus a comment thread.
+The Next.js reviewer dashboard in [`dashboard/`](dashboard/) wraps the same
+Postgres + MinIO that the CLI uses. Hiring managers sign up, upload a JD +
+CV bundle, watch the pipeline run, and review each candidate without ever
+touching the CLI.
+
+#### Run everything via Docker (recommended)
 
 ```bash
-make dev-up                    # Postgres + MinIO
-ats init                       # schema + bucket
-ats worker &                   # background worker that processes queued runs
-cd dashboard
-cp .env.example .env.local
-npm install
-npm run dev                    # http://localhost:3000
+make dev-up                                              # Postgres + MinIO
+docker build -t ats:dev .                                # Python image (CLI + worker)
+docker build -t ats-dashboard:dev dashboard              # Next.js image
+docker compose --profile app up -d                       # adds worker + dashboard
+ats init                                                 # one-time: schema + bucket
 ```
 
-Sign up at `/signup` — the org is auto-created from your email's domain (`alice@acme.com` → `acme`). Subsequent users at the same domain auto-join that org as `reviewer`. Schema source-of-truth stays in Python (`ats/storage/models.py`); the dashboard reads/writes via raw `pg` queries with hand-typed TypeScript shapes.
+Endpoints (host-side, default ports):
+
+| Service | URL | Notes |
+|---|---|---|
+| Reviewer dashboard | http://localhost:3000 | Next.js 15 production build |
+| MinIO console | http://localhost:9001 | `minioadmin` / `minioadmin` |
+| MinIO S3 API | http://localhost:9000 | What the worker + dashboard speak |
+| Postgres | `localhost:5432` | `ats` / `ats` / `ats` |
+
+#### Run the dashboard from source (fast iteration)
+
+```bash
+make dev-up
+ats init
+ats worker &                                             # one shell
+cd dashboard
+npm install
+npm run dev                                              # http://localhost:3000
+```
+
+#### Sign up flow
+
+The org is auto-created from your email's domain (`alice@acme.com` → org
+`acme`, you're stamped as `admin`). Subsequent users at the same domain
+auto-join that org as `reviewer`. No invitations in v1; that's a deliberate
+trade-off documented in
+[`docs/superpowers/specs/2026-04-29-dashboard-design.md`](docs/superpowers/specs/2026-04-29-dashboard-design.md).
+
+#### What you see on each page
+
+- **`/runs`** — list of every run in your active org with status badges.
+- **`/runs/new`** — drop in a JD text file plus 1+ resumes (PDF / DOCX / TXT
+  / MD), choose `top_n` and `--skip-optional` if you want the cheaper run.
+  The dashboard uploads each file to MinIO, creates a `runs` row with
+  `status='queued'`, and the worker picks it up within `ATS_WORKER_POLL_S`
+  seconds.
+- **`/runs/[id]`** — live run detail:
+  - **Job description card** — role / seniority / `min_years+ yrs` chips,
+    must-have requirements as rose chips, nice-to-haves as blue chips,
+    responsibilities as a bulleted list, plus a presigned-URL download
+    of the original JD blob.
+  - **Pipeline progress** — checklist of every orchestrator stage (JD
+    analysis · parsing · dedup · scoring · red flags · interview Qs ·
+    enrichment · bias · ranking · outreach) with a live count
+    (`3 / 4 candidates`) and per-stage state (done / in-progress / pending
+    / skipped). A collapsible recent-events log lists up to 50 audit rows.
+  - **Bias audit** payload (when present).
+  - **Candidate cards** — score, name, email, optional decision badge.
+- **`/runs/[id]/candidates/[cid]`** — per-candidate detail:
+  - **Summary panel** — score gauge (0–1 with markers), verdict badge
+    (Strong / Mixed / Weak fit, derived from score; reviewer's manual
+    decision overrides), pros (verifier-confirmed skills + strong GitHub
+    signals), cons (hallucinated claims + red-flag entries), match
+    rationale.
+  - **Decision panel** — Shortlist / Hold / Reject + free-text notes.
+    Persists to the new `decisions` table.
+  - **Red flags** — gaps and overlaps as horizontal bar lists (months
+    relative to the longest), inconsistencies as bullets.
+  - **Interview questions** — numbered cards with skill chips and
+    collapsible probe lists.
+  - **GitHub enrichment** — stat tiles (repos / followers / top languages),
+    notable-repos table with star and fork counts.
+  - **Parsed resume** — contact card · skill chips · vertical experience
+    timeline with bullets · education cards · clickable link chips.
+  - **Comments thread** — per-candidate, with avatar initials and timestamps.
+  - **Download resume** — presigned MinIO URL (5-minute expiry).
+
+#### Architecture notes
+
+Schema source-of-truth stays in Python ([`ats/storage/models.py`](ats/storage/models.py)).
+The dashboard talks to Postgres directly via raw `pg` queries with
+hand-typed TypeScript shapes in `dashboard/src/lib/types.ts` — no Prisma
+migrations, no schema drift. Tenant isolation lives in
+`dashboard/src/lib/repo.ts` (every query takes `orgId`) and is enforced at
+the SQL level via composite foreign keys (`(org_id, id)`).
+
+Auth is roll-our-own: bcrypt-hashed passwords + a server-side `sessions`
+table; the cookie carries only the random session id. CSRF is handled by
+`SameSite=Lax` plus an `Origin` header check on state-changing routes.
 
 Flags:
 
@@ -170,17 +264,46 @@ The image is non-root (uid 1000), uses `tini` as PID 1, and persists state at
 ## How it works
 
 ```
-                 ┌── jd_analyzer
-                 │
-resumes ─► parser ─► deduper ─► matcher ─► verifier ─► bias gate ─► ranker
-                                  │           │            │
-                                  └── red_flags / summarizer / interview_qs
-                                  └── enricher (GitHub)
-                                                              │
-                                                          shortlist
-                                                              │
-                                                           outreach
+   Reviewer's browser
+        │
+        │ HTTPS (cookie session)
+        ▼
+   ┌────────────────────────────┐    ┌──────────────────────────────┐
+   │   Next.js dashboard        │    │            MinIO              │
+   │ - login / signup / sessions│    │ - orgs/<id>/jds/...           │
+   │ - upload JD + resumes      │◄──►│ - orgs/<id>/resumes/<sha>/... │
+   │ - decisions / comments     │    │ presigned GETs from dashboard │
+   │ - reads from Postgres      │    └──────────────────────────────┘
+   └─────────────┬──────────────┘                  ▲
+                 │                                  │ resumes / JD
+                 ▼                                  │ blob fetches
+   ┌────────────────────────────┐                  │
+   │         Postgres           │                  │
+   │ orgs · users · memberships │                  │
+   │ runs · candidates · scores │                  │
+   │ shortlists · audits        │                  │
+   │ sessions · decisions       │                  │
+   │ candidate_comments         │                  │
+   └─────────────┬──────────────┘                  │
+                 │ FOR UPDATE SKIP LOCKED          │
+                 ▼                                  │
+   ┌────────────────────────────┐                  │
+   │      ats worker (Python)    │──────────────────┘
+   │  ┌── jd_analyzer            │
+   │  │                          │
+   │  parser ─► deduper ─► matcher ─► verifier ─► bias gate ─► ranker
+   │           │           │           │
+   │           └── red_flags / summarizer / interview_qs
+   │           └── enricher (GitHub)
+   │                                  │
+   │                              shortlist
+   │                                  │
+   │                              outreach
+   └────────────────────────────┘
 ```
+
+`ats screen` (CLI) hits the same orchestrator without going through the queue;
+the worker exists so the dashboard can hand-off long-running screening jobs.
 
 | Tier | Agents |
 |------|--------|
@@ -221,19 +344,44 @@ flake8 ats tests
 - The `enricher` agent calls `https://api.github.com` and nothing else. The
   bias auditor never uses inferred demographic attributes for scoring — only
   for post-hoc disparity detection.
+- Dashboard passwords are hashed with **bcrypt** (≥10 rounds). Sessions live
+  server-side in the `sessions` table; the cookie carries only the random
+  session id and is `HttpOnly; Secure; SameSite=Lax`. Logout sets
+  `revoked_at`; reused / expired ids are rejected at the lookup layer.
+- Resume + JD downloads from the dashboard go through **presigned MinIO
+  URLs** with a 5-minute expiry. The cookie session never touches MinIO.
+- Tenant isolation is enforced at three layers: composite SQL FKs
+  (`(org_id, id)` parents, `(org_id, run_id)` children), the Python
+  `OrgScopedRepository` base class, and the dashboard's `assertRunAndCandidateInOrg`
+  guard on every mutation.
 
 ---
 
 ## Roadmap
 
-- ✅ Sub-project #1: Postgres + MinIO + multi-tenant storage foundation.
-- ✅ Sub-projects #2–#4 (bundled): Next.js reviewer dashboard with email +
-  password auth (cookie sessions), upload-and-queue runs, per-candidate
-  shortlist / hold / reject decisions, comment threads, presigned MinIO
-  resume downloads.
-- ⏳ Sub-project #5: append-only signed audit log + compliance export.
+Shipped:
+
+- ✅ **Sub-project #1** — Postgres + MinIO + multi-tenant storage foundation
+  (org-scoped repository layer, composite FKs for tenant isolation, async
+  SQLAlchemy + aioboto3). Spec:
+  [`docs/superpowers/specs/2026-04-29-storage-foundation-design.md`](docs/superpowers/specs/2026-04-29-storage-foundation-design.md)
+  (or earlier `tell-me-what-cool-…` plan file).
+- ✅ **Sub-projects #2–#4 (bundled)** — Next.js reviewer dashboard with
+  email + password auth (bcrypt + server-side cookie sessions),
+  upload-and-queue runs, live pipeline progress, JD card, candidate
+  summary panel (score gauge / verdict / pros / cons), rich
+  visualizations for red flags / interview questions / GitHub enrichment
+  / parsed resume, decision panel, comment threads, presigned MinIO
+  resume + JD downloads. Spec:
+  [`docs/superpowers/specs/2026-04-29-dashboard-design.md`](docs/superpowers/specs/2026-04-29-dashboard-design.md).
+
+Deferred:
+
+- ⏳ **Sub-project #5** — append-only signed audit log + compliance export.
 - ⏳ Password reset by email, email verification, multi-org invitations.
 - ⏳ LinkedIn enricher (today the enricher is GitHub-only).
+- ⏳ Real-time updates (SSE / websockets) — the dashboard polls every 2.5s
+  while a run is `queued` / `running`.
 
 ---
 
