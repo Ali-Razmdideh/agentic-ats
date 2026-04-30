@@ -63,6 +63,13 @@ async def _init_async(settings: Settings) -> None:
         async with engine.begin() as conn:
             await conn.exec_driver_sql("CREATE EXTENSION IF NOT EXISTS citext")
             await conn.run_sync(Base.metadata.create_all)
+            # Idempotent column adds for older deployments that pre-date
+            # later sub-projects. Each ALTER is guarded by IF NOT EXISTS.
+            await conn.exec_driver_sql(
+                "ALTER TABLE audit_log "
+                "ADD COLUMN IF NOT EXISTS prev_hash BYTEA, "
+                "ADD COLUMN IF NOT EXISTS hash BYTEA"
+            )
         async with sm() as session:
             existing = await session.execute(
                 select(Org).where(Org.slug == settings.default_org_slug)

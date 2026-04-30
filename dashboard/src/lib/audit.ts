@@ -1,8 +1,18 @@
 // Append-only compliance log. Mirrors the Python AuditLogRepository so
 // dashboard-originated events land in the same table the worker writes
 // to. Keep payloads small + redaction-safe (no passwords, no resume body).
+//
+// Each append computes an HMAC chain hash; both Python and this helper
+// must produce identical bytes for a given record. See lib/audit-chain.ts
+// + ats/storage/audit_chain.py.
 
-import { pool } from "@/lib/db";
+import { pool, withClient } from "@/lib/db";
+import {
+  ZERO_HASH,
+  computeHash,
+  nowIso,
+  recordView,
+} from "@/lib/audit-chain";
 
 export type ActorKind = "user" | "worker" | "system";
 
@@ -28,24 +38,64 @@ interface AppendInput {
   targetId?: number | null;
 }
 
-/** Append an audit event. Failures are logged + swallowed: a logging
- *  outage must NEVER block a reviewer action. */
+/** Append an audit event with HMAC chain hash. Failures are logged +
+ *  swallowed: a logging outage must NEVER block a reviewer action. */
 export async function appendAudit(input: AppendInput): Promise<void> {
   try {
-    await pool.query(
-      `INSERT INTO audit_log
-         (org_id, actor_user_id, actor_kind, kind, target_kind, target_id, payload)
-       VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-      [
-        input.orgId,
-        input.actorUserId,
-        input.actorKind,
-        input.kind,
-        input.targetKind ?? null,
-        input.targetId ?? null,
-        input.payload,
-      ],
-    );
+    await withClient(async (client) => {
+      await client.query("BEGIN");
+      try {
+        // Per-org transaction-scoped advisory lock; same key the Python
+        // worker uses, so cross-language writers serialize.
+        await client.query("SELECT pg_advisory_xact_lock($1)", [input.orgId]);
+
+        const prevRes = await client.query<{ hash: Buffer | null }>(
+          `SELECT hash FROM audit_log
+             WHERE org_id = $1 AND hash IS NOT NULL
+             ORDER BY id DESC LIMIT 1`,
+          [input.orgId],
+        );
+        const prev =
+          prevRes.rows[0]?.hash != null
+            ? Buffer.from(prevRes.rows[0]!.hash!)
+            : ZERO_HASH;
+        const createdAt = nowIso();
+        const view = recordView({
+          org_id: input.orgId,
+          actor_user_id: input.actorUserId,
+          actor_kind: input.actorKind,
+          kind: input.kind,
+          target_kind: input.targetKind ?? null,
+          target_id: input.targetId ?? null,
+          payload: input.payload,
+          created_at: createdAt,
+        });
+        const hash = computeHash(prev, view);
+
+        await client.query(
+          `INSERT INTO audit_log
+             (org_id, actor_user_id, actor_kind, kind, target_kind, target_id,
+              payload, created_at, prev_hash, hash)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+          [
+            input.orgId,
+            input.actorUserId,
+            input.actorKind,
+            input.kind,
+            input.targetKind ?? null,
+            input.targetId ?? null,
+            input.payload,
+            createdAt,
+            prev,
+            hash,
+          ],
+        );
+        await client.query("COMMIT");
+      } catch (e) {
+        await client.query("ROLLBACK");
+        throw e;
+      }
+    });
   } catch (err) {
     // eslint-disable-next-line no-console
     console.error("audit_log append failed", { kind: input.kind, err });

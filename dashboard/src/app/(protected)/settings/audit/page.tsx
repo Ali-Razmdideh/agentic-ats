@@ -7,6 +7,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { requireUserAndOrg } from "@/lib/auth";
 import { countAudit, listAudit } from "@/lib/audit";
+import AuditVerifyButton from "@/components/AuditVerifyButton";
 
 export const dynamic = "force-dynamic";
 
@@ -74,12 +75,15 @@ export default async function AuditPage({
             {total.toLocaleString()} total events.
           </p>
         </div>
-        <a
-          href={exportHref}
-          className="rounded-md border border-slate-300 px-3 py-1.5 text-sm hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-800"
-        >
-          Download CSV
-        </a>
+        <div className="flex flex-col items-end gap-2">
+          <a
+            href={exportHref}
+            className="rounded-md border border-slate-300 px-3 py-1.5 text-sm hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-800"
+          >
+            Download CSV
+          </a>
+          <AuditVerifyButton />
+        </div>
       </div>
 
       <form

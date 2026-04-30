@@ -14,6 +14,7 @@ from sqlalchemy import (
     ForeignKeyConstraint,
     Identity,
     Integer,
+    LargeBinary,
     PrimaryKeyConstraint,
     String,
     Text,
@@ -322,15 +323,20 @@ class CandidateComment(Base):
 
 
 class AuditLog(Base):
-    """Append-only compliance log of reviewer actions.
+    """Append-only compliance log of reviewer actions, HMAC-chained.
 
     Distinct from the existing ``audits`` table (which holds agent
     outputs). This table records WHO did WHAT to WHICH target — the
     raw material for legal / compliance reviews (NYC AEDT, EU AI Act).
 
-    v1 has no chain-hash; rows are append-only by convention (no
-    UPDATE/DELETE codepaths) but not cryptographically tamper-evident.
-    A future migration may add ``prev_hash`` + ``hash`` columns.
+    Each row's ``hash`` is HMAC-SHA256(SECRET, prev_hash || canonical_json(record)).
+    The first row in an org has ``prev_hash`` = 32 zero bytes. Modifying
+    any row's content (or deleting one mid-chain) invalidates every
+    later hash; ``/api/audit/verify`` walks the chain and reports the
+    first break.
+
+    Pre-existing rows from sub-project #5 v1 have ``hash`` = NULL and
+    are reported by the verifier as "pre-chain".
     """
 
     __tablename__ = "audit_log"
@@ -352,3 +358,7 @@ class AuditLog(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
+    # HMAC chain — see canonical_json + audit_chain helpers for the
+    # serialization contract that Python and TS must agree on.
+    prev_hash: Mapped[bytes | None] = mapped_column(LargeBinary, nullable=True)
+    hash: Mapped[bytes | None] = mapped_column(LargeBinary, nullable=True)

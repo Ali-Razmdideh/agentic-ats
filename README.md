@@ -109,6 +109,7 @@ ATS_MODEL_FAST=anthropic/claude-haiku-4.5
 | `ATS_MAX_COST_USD` | `0` | Hard cap (`0` = no cap) |
 | `ATS_WORKER_POLL_S` | `3` | Worker queue poll interval |
 | `WORKER_HTTP_PROXY` | _(unset)_ | Optional HTTP/HTTPS proxy for the worker container — set when the host's outbound traffic must go through one (e.g. `http://host.docker.internal:11180`). Blank in any environment with direct egress. |
+| `ATS_AUDIT_HMAC_KEY` | _(zeros, dev only)_ | Hex-encoded 32-byte secret for the `audit_log` HMAC chain. Worker + dashboard MUST share the same value. Generate with `python -c "import secrets; print(secrets.token_hex(32))"`. |
 
 ---
 
@@ -384,14 +385,20 @@ Shipped:
   `decision.set`, `comment.added`. Admin-only viewer at
   `/settings/audit` with kind + date-range filters; CSV export at
   `/api/audit/export` streams the full filtered log for legal /
-  compliance purposes (NYC AEDT, EU AI Act). Tamper-evidence (HMAC
-  chain) deferred to #5b.
+  compliance purposes (NYC AEDT, EU AI Act).
+- ✅ **Sub-project #5b** — HMAC-chained tamper-evidence on `audit_log`.
+  Each new row stores `prev_hash` + `hash` where
+  `hash = HMAC-SHA256(secret, prev_hash || canonical_json(record))`.
+  The same canonical-JSON contract is implemented in Python
+  (`ats/storage/audit_chain.py`) and TypeScript
+  (`dashboard/src/lib/audit-chain.ts`) so worker + dashboard writes
+  chain into a single sequence per org. Per-org Postgres advisory
+  locks (`pg_advisory_xact_lock(org_id)`) serialize concurrent
+  writers. New endpoint `/api/audit/verify` walks the chain and
+  reports the first break; the audit viewer has a "Verify chain"
+  button that surfaces the result inline.
 
 Deferred:
-
-- ⏳ **Sub-project #5b** — HMAC-chained tamper-evidence on `audit_log`
-  (`prev_hash` + `hash` columns; cross-language canonical-JSON
-  contract) + a `/api/audit/verify` endpoint.
 - ⏳ Password reset by email, email verification, multi-org invitations.
 - ⏳ LinkedIn enricher (today the enricher is GitHub-only).
 - ⏳ Real-time updates (SSE / websockets) — the dashboard polls every 2.5s
