@@ -1,4 +1,3 @@
-import { NextResponse } from "next/server";
 import { listMembershipsWithOrg } from "@/lib/auth";
 import {
   clearSessionCookie,
@@ -7,8 +6,9 @@ import {
   revokeSession,
 } from "@/lib/session";
 import { appendAudit } from "@/lib/audit";
+import { relativeRedirect } from "@/lib/redirect";
 
-export async function POST(req: Request) {
+export async function POST() {
   const sid = await getSessionCookie();
   if (sid) {
     // Resolve user + first membership BEFORE revoking, so we can audit
@@ -29,5 +29,5 @@ export async function POST(req: Request) {
     await revokeSession(sid);
   }
   await clearSessionCookie();
-  return NextResponse.redirect(new URL("/login", req.url), 303);
+  return relativeRedirect("/login");
 }

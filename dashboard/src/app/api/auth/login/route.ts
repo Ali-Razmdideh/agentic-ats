@@ -1,4 +1,3 @@
-import { NextResponse } from "next/server";
 import {
   listMembershipsWithOrg,
   login,
@@ -7,6 +6,7 @@ import {
 import { LoginInput } from "@/lib/schema";
 import { setActiveOrgCookie } from "@/lib/session";
 import { appendAudit } from "@/lib/audit";
+import { relativeRedirect } from "@/lib/redirect";
 
 export async function POST(req: Request) {
   const form = await req.formData();
@@ -15,14 +15,11 @@ export async function POST(req: Request) {
     password: form.get("password"),
   });
   if (!parsed.success) {
-    return NextResponse.redirect(
-      new URL("/login?error=validation", req.url),
-      303,
-    );
+    return relativeRedirect("/login?error=validation");
   }
   const user = await login(parsed.data.email, parsed.data.password);
   if (!user) {
-    return NextResponse.redirect(new URL("/login?error=invalid", req.url), 303);
+    return relativeRedirect("/login?error=invalid");
   }
   await startSessionFor(
     user.id,
@@ -42,5 +39,5 @@ export async function POST(req: Request) {
       payload: { email: user.email },
     });
   }
-  return NextResponse.redirect(new URL("/runs", req.url), 303);
+  return relativeRedirect("/runs");
 }

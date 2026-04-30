@@ -1,7 +1,7 @@
-import { NextResponse } from "next/server";
 import { signup } from "@/lib/auth";
 import { SignupInput } from "@/lib/schema";
 import { appendAudit } from "@/lib/audit";
+import { relativeRedirect } from "@/lib/redirect";
 
 export async function POST(req: Request) {
   const form = await req.formData();
@@ -11,10 +11,7 @@ export async function POST(req: Request) {
     display_name: form.get("display_name") || null,
   });
   if (!parsed.success) {
-    return NextResponse.redirect(
-      new URL("/signup?error=validation", req.url),
-      303,
-    );
+    return relativeRedirect("/signup?error=validation");
   }
   try {
     const { user, org } = await signup(
@@ -31,13 +28,7 @@ export async function POST(req: Request) {
     });
   } catch (e) {
     const code = (e as Error).message === "EMAIL_TAKEN" ? "taken" : "unknown";
-    return NextResponse.redirect(
-      new URL(`/signup?error=${code}`, req.url),
-      303,
-    );
+    return relativeRedirect(`/signup?error=${code}`);
   }
-  return NextResponse.redirect(
-    new URL("/login?signed_up=1", req.url),
-    303,
-  );
+  return relativeRedirect("/login?signed_up=1");
 }

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getCurrentUser, listMembershipsWithOrg } from "@/lib/auth";
 import { setActiveOrgCookie } from "@/lib/session";
 import { SwitchOrgInput } from "@/lib/schema";
+import { relativeRedirect } from "@/lib/redirect";
 
 export async function POST(req: Request) {
   const user = await getCurrentUser();
@@ -19,5 +20,5 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "not_a_member" }, { status: 403 });
   }
   await setActiveOrgCookie(target.org.slug);
-  return NextResponse.redirect(new URL("/runs", req.url), 303);
+  return relativeRedirect("/runs");
 }
